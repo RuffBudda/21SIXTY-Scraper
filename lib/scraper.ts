@@ -1145,8 +1145,9 @@ export async function scrapeProfileProgressive(
       // Configure Chromium for serverless environment
       chromium.setGraphicsMode = false;
       
+      // Get executable path - this will extract the bundled Chromium if needed
       const execPath = await chromium.executablePath();
-      const chromiumArgs = chromium.args;
+      const chromiumArgs = chromium.args || [];
       const headlessMode = chromium.headless === true || chromium.headless === "new" ? true : false;
 
       // Note: existsSync check removed - it can fail in serverless environments
@@ -1157,8 +1158,18 @@ export async function scrapeProfileProgressive(
         throw new Error('Failed to get Chromium executable path from @sparticuz/chromium');
       }
 
+      // Ensure we have the necessary args for serverless
+      const serverlessArgs = [
+        ...chromiumArgs,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--single-process',
+        '--disable-gpu',
+      ];
+
       launchOptions = {
-        args: chromiumArgs,
+        args: serverlessArgs,
         executablePath: execPath,
         headless: headlessMode,
       };
