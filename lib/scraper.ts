@@ -65,7 +65,7 @@ export function validateInstagramUrl(url: string): boolean {
     const urlObj = new URL(url);
     return (
       urlObj.hostname.includes('instagram.com') &&
-      urlObj.pathname.match(/^\/[a-zA-Z0-9._]+$/)
+      !!urlObj.pathname.match(/^\/[a-zA-Z0-9._]+$/)
     );
   } catch {
     return false;
@@ -527,12 +527,12 @@ export async function scrapeProfile(url: string): Promise<ProfileData> {
   let browser: any = null;
 
   try {
-    chromium.setGraphicsMode(false);
+    chromium.setGraphicsMode = false;
 
     browser = await playwrightChromium.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+      headless: chromium.headless === true || chromium.headless === "new" ? true : false,
     });
 
     const page = await browser.newPage();
