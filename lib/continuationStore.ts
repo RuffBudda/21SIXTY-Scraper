@@ -1,4 +1,5 @@
 import { ScrapeContinuation } from './types';
+import { Buffer } from 'buffer';
 
 /**
  * In-memory store for continuation tokens

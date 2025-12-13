@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { Buffer } from 'buffer';
 
 /**
  * Validates API key using constant-time comparison to prevent timing attacks
