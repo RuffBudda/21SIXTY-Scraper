@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { scrapeProfile } from '@/lib/scraper';
-import { ScrapeResponse, ProfileData } from '@/lib/types';
+import { scrapeProfileProgressive } from '@/lib/scraper';
+import { ScrapeResponse, ScrapeContinuation } from '@/lib/types';
+import { getContinuation, setContinuation } from '@/lib/continuationStore';
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,27 +34,60 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body = await request.json();
-    const { url } = body;
+    const { url, continuationToken } = body;
 
-    if (!url || typeof url !== 'string') {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Missing or invalid URL parameter',
-        },
-        { status: 400 }
-      );
+    // Handle continuation request
+    let continuation: ScrapeContinuation | null = null;
+    let targetUrl: string;
+    
+    if (continuationToken) {
+      continuation = getContinuation(continuationToken);
+      if (!continuation) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Invalid or expired continuation token',
+            timestamp: new Date().toISOString(),
+          },
+          { status: 400 }
+        );
+      }
+      // Use URL from continuation
+      targetUrl = continuation.url;
+    } else {
+      // Initial request - URL is required
+      if (!url || typeof url !== 'string') {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Missing or invalid URL parameter',
+          },
+          { status: 400 }
+        );
+      }
+      targetUrl = url;
     }
 
-    // Scrape profile (supports LinkedIn, Instagram, and websites)
-    const profileData = await scrapeProfile(url);
+    // Scrape profile progressively (supports continuation)
+    const result = await scrapeProfileProgressive(targetUrl, continuation || undefined);
+
+    // Generate and store continuation token if scraping is incomplete
+    let token: string | undefined;
+    if (!result.isComplete && result.continuation) {
+      token = result.continuation.sessionId;
+      setContinuation(token, result.continuation);
+    }
 
     const response: ScrapeResponse = {
       success: true,
-      platform: profileData.platform,
-      data: profileData,
+      platform: result.data.platform,
+      data: result.data,
       timestamp: new Date().toISOString(),
-      url,
+      url: targetUrl,
+      continuationToken: token,
+      isComplete: result.isComplete,
+      firstVisibleText: result.firstVisibleText,
+      lastVisibleText: result.lastVisibleText,
     };
 
     return NextResponse.json(response, {

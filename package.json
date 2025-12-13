@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "npx playwright install chromium || echo 'Note: Playwright browsers installation skipped. Run: npx playwright install chromium'",
+    "install-browsers": "npx playwright install chromium"
   },
   "dependencies": {
     "next": "^14.2.0",

@@ -102,6 +102,26 @@ export interface WebsitePersonData {
 // Unified Profile Data type
 export type ProfileData = LinkedInProfileData | InstagramProfileData | WebsitePersonData;
 
+export interface ScrapeContinuation {
+  url: string;
+  platform: PlatformType;
+  sessionId: string;
+  scrapedSections: string[];
+  lastScrapedIndex: number;
+  firstVisibleText?: string;
+  lastVisibleText?: string;
+  partialData: Partial<ProfileData>;
+  timestamp: number;
+}
+
+export interface ProgressiveScrapeResult {
+  data: ProfileData;
+  isComplete: boolean;
+  continuation?: ScrapeContinuation;
+  firstVisibleText?: string;
+  lastVisibleText?: string;
+}
+
 export interface ScrapeResponse {
   success: boolean;
   platform?: PlatformType;
@@ -109,4 +129,8 @@ export interface ScrapeResponse {
   error?: string;
   timestamp: string;
   url: string;
+  continuationToken?: string;
+  isComplete?: boolean;
+  firstVisibleText?: string;
+  lastVisibleText?: string;
 }

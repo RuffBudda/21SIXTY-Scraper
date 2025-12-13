@@ -32,7 +32,23 @@ cd SCRAPE
 npm install
 ```
 
-3. Set up environment variables:
+3. Install Playwright browsers:
+```bash
+npm run install-browsers
+# Or manually: npx playwright install chromium
+```
+
+**Important for Linux/WSL/Docker:**
+If you're running on Linux, WSL, or in a Docker container, you may also need to install system dependencies:
+```bash
+# Ubuntu/Debian
+sudo apt-get install -y libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2 libpangocairo-1.0-0 libatk1.0-0 libcairo-gobject2 libgtk-3-0 libgdk-pixbuf2.0-0
+
+# Or use Playwright's install-deps command
+npx playwright install-deps chromium
+```
+
+4. Set up environment variables:
 Create a `.env.local` file:
 ```
 API_KEY=your-secret-api-key-here
