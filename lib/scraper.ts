@@ -1148,7 +1148,8 @@ export async function scrapeProfileProgressive(
       // Get executable path - this will extract the bundled Chromium if needed
       const execPath = await chromium.executablePath();
       const chromiumArgs = chromium.args || [];
-      const headlessMode = chromium.headless === true || chromium.headless === "new" ? true : false;
+      // In serverless, always use headless mode
+      const headlessMode = true;
 
       // Note: existsSync check removed - it can fail in serverless environments
       // even when the bundled Chromium from @sparticuz/chromium is valid.
