@@ -186,6 +186,7 @@ export default function Home() {
         {/* Header */}
         <header className="text-center mb-12">
           <div className="flex items-center justify-center gap-4 mb-6">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src="/logos/logo.png" 
               alt="21 SIXTY Scrapper Logo" 

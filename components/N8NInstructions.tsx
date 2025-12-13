@@ -94,16 +94,16 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
               <h4 className="font-bold text-lg mb-3 text-blue-300">Step 1: Create New Workflow</h4>
               <ol className="list-decimal list-inside space-y-2 ml-2 text-gray-300">
                 <li>Open your N8N dashboard</li>
-                <li>Click the <strong className="text-gray-200">"New Workflow"</strong> button in the top right corner</li>
-                <li>Name your workflow (e.g., "Profile Scraper")</li>
+                <li>Click the <strong className="text-gray-200">&quot;New Workflow&quot;</strong> button in the top right corner</li>
+                <li>Name your workflow (e.g., &quot;Profile Scraper&quot;)</li>
               </ol>
             </div>
 
             <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-5">
               <h4 className="font-bold text-lg mb-3 text-blue-300">Step 2: Add HTTP Request Node</h4>
               <ol className="list-decimal list-inside space-y-2 ml-2 text-gray-300">
-                <li>In the node palette on the left, search for <strong className="text-gray-200">"HTTP Request"</strong></li>
-                <li>Drag and drop the <strong className="text-gray-200">"HTTP Request"</strong> node into the workflow canvas</li>
+                <li>In the node palette on the left, search for <strong className="text-gray-200">&quot;HTTP Request&quot;</strong></li>
+                <li>Drag and drop the <strong className="text-gray-200">&quot;HTTP Request&quot;</strong> node into the workflow canvas</li>
                 <li>Click on the node to open its configuration panel</li>
               </ol>
             </div>
@@ -111,8 +111,8 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
             <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-5">
               <h4 className="font-bold text-lg mb-3 text-blue-300">Step 3: Configure HTTP Method and URL</h4>
               <ol className="list-decimal list-inside space-y-2 ml-2 text-gray-300">
-                <li>Set <strong className="text-gray-200">"Method"</strong> to <code className="bg-gray-800 px-2 py-1 rounded text-blue-300">POST</code></li>
-                <li>Set <strong className="text-gray-200">"URL"</strong> to:</li>
+                <li>Set <strong className="text-gray-200">&quot;Method&quot;</strong> to <code className="bg-gray-800 px-2 py-1 rounded text-blue-300">POST</code></li>
+                <li>Set <strong className="text-gray-200">&quot;URL&quot;</strong> to:</li>
               </ol>
               <div className="mt-3 p-3 bg-gray-900 rounded-lg border border-gray-700">
                 <code className="text-sm text-cyan-300 break-all">{webhookUrl}</code>
@@ -122,10 +122,10 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
             <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-5">
               <h4 className="font-bold text-lg mb-3 text-blue-300">Step 4: Add Authentication Header</h4>
               <ol className="list-decimal list-inside space-y-2 ml-2 text-gray-300">
-                <li>Scroll down to <strong className="text-gray-200">"Headers"</strong> section</li>
-                <li>Click <strong className="text-gray-200">"Add Header"</strong> button</li>
-                <li>Set <strong className="text-gray-200">"Name"</strong> to: <code className="bg-gray-800 px-2 py-1 rounded text-blue-300">X-API-Key</code></li>
-                <li>Set <strong className="text-gray-200">"Value"</strong> to your API key</li>
+                <li>Scroll down to <strong className="text-gray-200">&quot;Headers&quot;</strong> section</li>
+                <li>Click <strong className="text-gray-200">&quot;Add Header&quot;</strong> button</li>
+                <li>Set <strong className="text-gray-200">&quot;Name&quot;</strong> to: <code className="bg-gray-800 px-2 py-1 rounded text-blue-300">X-API-Key</code></li>
+                <li>Set <strong className="text-gray-200">&quot;Value&quot;</strong> to your API key</li>
                 <li className="mt-3 text-sm text-gray-400">💡 <strong>Tip:</strong> For security, use N8N credentials feature to store your API key securely</li>
               </ol>
             </div>
@@ -133,9 +133,9 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
             <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-5">
               <h4 className="font-bold text-lg mb-3 text-blue-300">Step 5: Configure Request Body</h4>
               <ol className="list-decimal list-inside space-y-2 ml-2 text-gray-300">
-                <li>Scroll to <strong className="text-gray-200">"Send Body"</strong> section</li>
-                <li>Enable <strong className="text-gray-200">"Send Body"</strong> toggle</li>
-                <li>Set <strong className="text-gray-200">"Content Type"</strong> to <code className="bg-gray-800 px-2 py-1 rounded text-blue-300">JSON</code></li>
+                <li>Scroll to <strong className="text-gray-200">&quot;Send Body&quot;</strong> section</li>
+                <li>Enable <strong className="text-gray-200">&quot;Send Body&quot;</strong> toggle</li>
+                <li>Set <strong className="text-gray-200">&quot;Content Type&quot;</strong> to <code className="bg-gray-800 px-2 py-1 rounded text-blue-300">JSON</code></li>
                 <li>In the body editor, enter one of:</li>
               </ol>
               <pre className="mt-3 p-4 bg-gray-900 rounded-lg border border-gray-700 text-sm text-gray-300 overflow-x-auto font-mono">
@@ -157,10 +157,10 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
             <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-5">
               <h4 className="font-bold text-lg mb-3 text-blue-300">Step 6: Add Trigger Node</h4>
               <ol className="list-decimal list-inside space-y-2 ml-2 text-gray-300">
-                <li>Search for <strong className="text-gray-200">"Manual Trigger"</strong> or <strong className="text-gray-200">"Webhook"</strong> node</li>
+                <li>Search for <strong className="text-gray-200">&quot;Manual Trigger&quot;</strong> or <strong className="text-gray-200">&quot;Webhook&quot;</strong> node</li>
                 <li>Add it before the HTTP Request node</li>
                 <li>Connect it to the HTTP Request node</li>
-                <li>For <strong className="text-gray-200">Manual Trigger</strong>: Click "Execute Workflow" to test</li>
+                <li>For <strong className="text-gray-200">Manual Trigger</strong>: Click &quot;Execute Workflow&quot; to test</li>
                 <li>For <strong className="text-gray-200">Webhook</strong>: Copy the webhook URL to use in external systems</li>
               </ol>
             </div>
@@ -168,7 +168,7 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
             <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-5">
               <h4 className="font-bold text-lg mb-3 text-blue-300">Step 7: Handle Response Data</h4>
               <ol className="list-decimal list-inside space-y-2 ml-2 text-gray-300">
-                <li>Add a <strong className="text-gray-200">"Set"</strong> node after the HTTP Request node</li>
+                <li>Add a <strong className="text-gray-200">&quot;Set&quot;</strong> node after the HTTP Request node</li>
                 <li>Extract specific fields using expressions:
                   <ul className="list-disc list-inside ml-6 mt-2 space-y-1 text-sm text-gray-400">
                     <li>Profile name: <code className="bg-gray-800 px-1 rounded text-blue-300">{`{{ $json.data.name }}`}</code></li>
@@ -182,8 +182,8 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
             <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-5">
               <h4 className="font-bold text-lg mb-3 text-blue-300">Step 8: Error Handling</h4>
               <ol className="list-decimal list-inside space-y-2 ml-2 text-gray-300">
-                <li>In the HTTP Request node, enable <strong className="text-gray-200">"Continue On Fail"</strong></li>
-                <li>Add an <strong className="text-gray-200">"IF"</strong> node after the HTTP Request</li>
+                <li>In the HTTP Request node, enable <strong className="text-gray-200">&quot;Continue On Fail&quot;</strong></li>
+                <li>Add an <strong className="text-gray-200">&quot;IF&quot;</strong> node after the HTTP Request</li>
                 <li>Check status code: <code className="bg-gray-800 px-2 py-1 rounded text-blue-300">{`{{ $json.statusCode }}`}</code></li>
                 <li>Branch on success (200) vs errors (401, 429, 500)</li>
                 <li>Add error notification or retry logic as needed</li>
@@ -207,7 +207,7 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
               </pre>
             </div>
             <p className="text-sm mt-3 text-gray-400">
-              💡 To import: In N8N, click the three dots menu → "Import from File" → Paste this JSON
+              💡 To import: In N8N, click the three dots menu → &quot;Import from File&quot; → Paste this JSON
             </p>
           </div>
 
@@ -246,9 +246,9 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
               <div className="bg-yellow-950/30 border border-yellow-800/50 p-4 rounded-lg">
                 <h4 className="font-bold mb-2 text-yellow-300">429 Too Many Requests</h4>
                 <ul className="list-disc list-inside space-y-1 ml-2 text-sm text-gray-300">
-                  <li>You've exceeded the rate limit (10 requests per minute per API key)</li>
+                  <li>You&apos;ve exceeded the rate limit (10 requests per minute per API key)</li>
                   <li>Add a delay node between requests in your workflow</li>
-                  <li>Use N8N's queue feature to manage request frequency</li>
+                  <li>Use N8N&apos;s queue feature to manage request frequency</li>
                   <li>Check the <code className="bg-gray-800 px-1 rounded text-yellow-300">Retry-After</code> header in the response</li>
                 </ul>
               </div>
@@ -278,7 +278,7 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
           <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-6">
             <h3 className="font-bold text-xl mb-4 text-gray-100">Best Practices</h3>
             <ul className="list-disc list-inside space-y-2 ml-2 text-gray-300">
-              <li>Store your API key securely using N8N's credential management feature</li>
+              <li>Store your API key securely using N8N&apos;s credential management feature</li>
               <li>Implement rate limiting in your workflow to avoid hitting API limits</li>
               <li>Add error handling and retry logic for failed requests</li>
               <li>Use webhook nodes to trigger scrapes from external systems</li>
