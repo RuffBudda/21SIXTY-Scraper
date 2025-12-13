@@ -1,0 +1,12 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- LinkedIn "in" logo background -->
+  <rect x="5" y="5" width="22" height="22" rx="2" fill="#0077B5"/>
+  
+  <!-- LinkedIn "in" text -->
+  <text x="16" y="20" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="middle">in</text>
+  
+  <!-- Small scraper icon -->
+  <circle cx="23" cy="10" r="3" fill="#FFA500" opacity="0.9"/>
+  <circle cx="23" cy="10" r="2" fill="#FF8C00"/>
+</svg>
+

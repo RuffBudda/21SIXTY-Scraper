@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-gray-950 text-gray-100 antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+:root {
+  --foreground: 255, 255, 255;
+  --background: 17, 24, 39;
+  --card: 31, 41, 55;
+  --card-foreground: 255, 255, 255;
+  --border: 55, 65, 81;
+  --muted: 55, 65, 81;
+  --muted-foreground: 156, 163, 175;
+  --accent: 0, 119, 181;
+  --accent-foreground: 255, 255, 255;
+}
+

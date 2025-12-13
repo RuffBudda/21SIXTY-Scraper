@@ -1,0 +1,447 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { formatToJSON, formatToCSV, formatToTXT } from '@/lib/formatters';
+import { ProfileData } from '@/lib/types';
+import N8NInstructions from '@/components/N8NInstructions';
+
+type TabType = 'scrape' | 'webhook';
+
+export default function Home() {
+  const [activeTab, setActiveTab] = useState<TabType>('scrape');
+  const [linkedInUrl, setLinkedInUrl] = useState('');
+  const [scraping, setScraping] = useState(false);
+  const [scrapedData, setScrapedData] = useState<ProfileData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Webhook panel state
+  const [apiKey, setApiKey] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookRequest, setWebhookRequest] = useState<any>(null);
+  const [webhookResponse, setWebhookResponse] = useState<any>(null);
+  const [webhookLoading, setWebhookLoading] = useState(false);
+
+  // Load API key from localStorage on mount
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem('linkedin_scraper_api_key');
+    if (savedApiKey) {
+      setApiKey(savedApiKey);
+    }
+    // Get current deployment URL
+    const currentUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    setWebhookUrl(`${currentUrl}/api/scrape`);
+  }, []);
+
+  const handleScrape = async () => {
+    if (!linkedInUrl.trim()) {
+      setError('Please enter a profile or website URL');
+      return;
+    }
+
+    setScraping(true);
+    setError(null);
+    setScrapedData(null);
+
+    try {
+      const response = await fetch('/api/scrape', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': apiKey,
+        },
+        body: JSON.stringify({ url: linkedInUrl }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to scrape profile');
+      }
+
+      if (data.success && data.data) {
+        setScrapedData(data.data);
+      } else {
+        throw new Error(data.error || 'No data received');
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred while scraping');
+    } finally {
+      setScraping(false);
+    }
+  };
+
+  const handleTestWebhook = async () => {
+    if (!linkedInUrl.trim()) {
+      setError('Please enter a profile or website URL');
+      return;
+    }
+
+    if (!apiKey.trim()) {
+      setError('Please enter your API key');
+      return;
+    }
+
+    setWebhookLoading(true);
+    setError(null);
+    setWebhookRequest(null);
+    setWebhookResponse(null);
+
+    const requestData = {
+      method: 'POST',
+      url: webhookUrl,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': apiKey,
+      },
+      body: {
+        url: linkedInUrl,
+      },
+    };
+
+    setWebhookRequest(requestData);
+
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': apiKey,
+        },
+        body: JSON.stringify({ url: linkedInUrl }),
+      });
+
+      const data = await response.json();
+
+      setWebhookResponse({
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        data,
+      });
+
+      if (response.ok && data.success && data.data) {
+        setScrapedData(data.data);
+      }
+    } catch (err: any) {
+      setWebhookResponse({
+        error: err.message || 'An error occurred',
+      });
+    } finally {
+      setWebhookLoading(false);
+    }
+  };
+
+  const handleDownload = (format: 'json' | 'csv' | 'txt') => {
+    if (!scrapedData) return;
+
+    let content = '';
+    let mimeType = '';
+    let filename = '';
+
+    switch (format) {
+      case 'json':
+        content = formatToJSON(scrapedData);
+        mimeType = 'application/json';
+        filename = `${scrapedData.platform}-profile.json`;
+        break;
+      case 'csv':
+        content = formatToCSV(scrapedData);
+        mimeType = 'text/csv';
+        filename = `${scrapedData.platform}-profile.csv`;
+        break;
+      case 'txt':
+        content = formatToTXT(scrapedData);
+        mimeType = 'text/plain';
+        filename = `${scrapedData.platform}-profile.txt`;
+        break;
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
+  const handleSaveApiKey = () => {
+    if (apiKey) {
+      localStorage.setItem('linkedin_scraper_api_key', apiKey);
+      alert('API key saved to browser storage');
+    } else {
+      localStorage.removeItem('linkedin_scraper_api_key');
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-gray-950">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12 max-w-7xl">
+        {/* Header */}
+        <header className="text-center mb-12">
+          <div className="flex items-center justify-center gap-4 mb-6">
+            <img 
+              src="/logos/logo.png" 
+              alt="21 SIXTY Scrapper Logo" 
+              className="h-20 w-20 rounded-xl shadow-lg" 
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }} 
+            />
+            <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+              21 SIXTY Scrapper
+            </h1>
+          </div>
+          <p className="text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed">
+            Scrape LinkedIn profiles, Instagram profiles, and websites with ease. Export to JSON, CSV, or TXT.
+          </p>
+        </header>
+
+        {/* Main Card */}
+        <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+          {/* Tabs */}
+          <div className="flex border-b border-gray-800">
+            <button
+              onClick={() => setActiveTab('scrape')}
+              className={`flex-1 py-5 px-6 text-center font-semibold text-base transition-all duration-200 relative ${
+                activeTab === 'scrape'
+                  ? 'text-linkedin'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Direct Scrape
+              {activeTab === 'scrape' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-linkedin" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('webhook')}
+              className={`flex-1 py-5 px-6 text-center font-semibold text-base transition-all duration-200 relative ${
+                activeTab === 'webhook'
+                  ? 'text-linkedin'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Webhook API
+              {activeTab === 'webhook' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-linkedin" />
+              )}
+            </button>
+          </div>
+
+          <div className="p-8">
+            {activeTab === 'scrape' ? (
+              /* Direct Scrape Panel */
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-3">
+                    API Key <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Enter your API key"
+                    className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-transparent text-gray-100 placeholder-gray-500 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-3">
+                    Profile/Website URL <span className="text-red-400">*</span>
+                  </label>
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={linkedInUrl}
+                      onChange={(e) => setLinkedInUrl(e.target.value)}
+                      placeholder="https://www.linkedin.com/in/example or https://instagram.com/username or https://example.com"
+                      className="flex-1 px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-transparent text-gray-100 placeholder-gray-500 transition-all"
+                    />
+                    <button
+                      onClick={handleScrape}
+                      disabled={scraping || !apiKey}
+                      className="px-8 py-3 bg-linkedin text-white font-semibold rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-linkedin/20 hover:shadow-linkedin/30"
+                    >
+                      {scraping ? (
+                        <span className="flex items-center gap-2">
+                          <span className="animate-spin">⏳</span>
+                          Scraping...
+                        </span>
+                      ) : (
+                        'Scrape'
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="bg-red-950/50 border border-red-800/50 text-red-300 px-5 py-4 rounded-lg flex items-center gap-3">
+                    <span className="text-xl">⚠️</span>
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                {scrapedData && (
+                  <div className="space-y-5">
+                    <div className="bg-green-950/30 border border-green-800/50 text-green-300 px-5 py-4 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">✓</span>
+                        <span>
+                          Profile scraped successfully! Platform: <strong className="font-bold">{scrapedData.platform.toUpperCase()}</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-5 max-h-[500px] overflow-y-auto">
+                      <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
+                        {formatToJSON(scrapedData)}
+                      </pre>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        onClick={() => handleDownload('json')}
+                        className="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium rounded-lg transition-all duration-200 border border-gray-700 hover:border-gray-600"
+                      >
+                        Download JSON
+                      </button>
+                      <button
+                        onClick={() => handleDownload('csv')}
+                        className="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium rounded-lg transition-all duration-200 border border-gray-700 hover:border-gray-600"
+                      >
+                        Download CSV
+                      </button>
+                      <button
+                        onClick={() => handleDownload('txt')}
+                        className="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium rounded-lg transition-all duration-200 border border-gray-700 hover:border-gray-600"
+                      >
+                        Download TXT
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Webhook Panel */
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-3">
+                    API Key
+                  </label>
+                  <div className="flex gap-3">
+                    <input
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="Enter your API key"
+                      className="flex-1 px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-transparent text-gray-100 placeholder-gray-500 transition-all"
+                    />
+                    <button
+                      onClick={handleSaveApiKey}
+                      className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium rounded-lg transition-all duration-200 border border-gray-700 hover:border-gray-600"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-3">
+                    Webhook URL
+                  </label>
+                  <input
+                    type="text"
+                    value={webhookUrl}
+                    onChange={(e) => setWebhookUrl(e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-transparent text-gray-100 placeholder-gray-500 transition-all font-mono text-sm"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-3">
+                    Profile/Website URL
+                  </label>
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={linkedInUrl}
+                      onChange={(e) => setLinkedInUrl(e.target.value)}
+                      placeholder="https://www.linkedin.com/in/example or https://instagram.com/username or https://example.com"
+                      className="flex-1 px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-transparent text-gray-100 placeholder-gray-500 transition-all"
+                    />
+                    <button
+                      onClick={handleTestWebhook}
+                      disabled={webhookLoading}
+                      className="px-8 py-3 bg-linkedin text-white font-semibold rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-linkedin/20 hover:shadow-linkedin/30"
+                    >
+                      {webhookLoading ? (
+                        <span className="flex items-center gap-2">
+                          <span className="animate-spin">⏳</span>
+                          Testing...
+                        </span>
+                      ) : (
+                        'Test Webhook'
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {webhookRequest && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-sm font-semibold text-gray-300">
+                        Request
+                      </label>
+                      <button
+                        onClick={() => handleCopyToClipboard(JSON.stringify(webhookRequest, null, 2))}
+                        className="text-sm text-linkedin hover:text-blue-400 font-medium transition-colors"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-5 max-h-72 overflow-y-auto">
+                      <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
+                        {JSON.stringify(webhookRequest, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+
+                {webhookResponse && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-sm font-semibold text-gray-300">
+                        Response
+                      </label>
+                      <button
+                        onClick={() => handleCopyToClipboard(JSON.stringify(webhookResponse, null, 2))}
+                        className="text-sm text-linkedin hover:text-blue-400 font-medium transition-colors"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-5 max-h-96 overflow-y-auto">
+                      <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
+                        {JSON.stringify(webhookResponse, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+
+                {/* N8N Instructions */}
+                <N8NInstructions webhookUrl={webhookUrl} apiKey={apiKey} />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
