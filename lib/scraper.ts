@@ -1,5 +1,5 @@
 import chromium from '@sparticuz/chromium';
-import { launch } from 'playwright-core';
+import { chromium as playwrightChromium } from 'playwright-core';
 import { 
   ProfileData, 
   LinkedInProfileData, 
@@ -529,7 +529,7 @@ export async function scrapeProfile(url: string): Promise<ProfileData> {
   try {
     chromium.setGraphicsMode(false);
 
-    browser = await launch({
+    browser = await playwrightChromium.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
