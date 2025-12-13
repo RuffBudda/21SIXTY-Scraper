@@ -1,20 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkAuth } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { scrapeProfile } from '@/lib/scraper';
 import { ScrapeResponse, ProfileData } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication
-    const authError = checkAuth(request);
-    if (authError) {
-      return authError;
-    }
-
-    // Check rate limiting
-    const apiKey = request.headers.get('X-API-Key') || '';
-    const rateLimit = checkRateLimit(apiKey);
+    // Check rate limiting using IP address
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
+               request.headers.get('x-real-ip') || 
+               'unknown';
+    const rateLimit = checkRateLimit(ip);
     
     if (!rateLimit.allowed) {
       const resetSeconds = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
@@ -89,7 +84,7 @@ export async function OPTIONS() {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, X-API-Key',
+      'Access-Control-Allow-Headers': 'Content-Type',
     },
   });
 }

@@ -6,7 +6,7 @@ A multi-platform scraper for LinkedIn profiles, Instagram profiles, and websites
 
 - 🎯 Scrape LinkedIn profiles, Instagram profiles, and websites (public content only)
 - 🔓 Expand collapsed content automatically
-- 🔌 Webhook API with API key authentication
+- 🔌 Webhook API (no authentication required)
 - 📥 Export data in JSON, CSV, or TXT formats
 - 🎨 Modern, responsive UI
 - 📚 Detailed N8N integration guide
@@ -49,8 +49,7 @@ npm run dev
 
 1. Push your code to GitHub
 2. Import project in Vercel
-3. Add environment variable `API_KEY` in Vercel dashboard
-4. Deploy!
+3. Deploy!
 
 The function timeout is set to 60 seconds (works on Vercel free tier).
 
@@ -66,9 +65,8 @@ The function timeout is set to 60 seconds (works on Vercel free tier).
 ### Webhook API
 
 1. Navigate to the "Webhook API" tab
-2. Enter your API key
-3. Test the webhook with a LinkedIn URL
-4. View request/response details
+2. Test the webhook with a LinkedIn, Instagram, or website URL
+3. View request/response details
 
 ### N8N Integration
 
@@ -87,7 +85,6 @@ See the detailed instructions in the Webhook API panel. The guide includes:
 ### Headers
 
 - `Content-Type: application/json`
-- `X-API-Key: your-api-key`
 
 ### Request Body
 
@@ -121,7 +118,7 @@ See the detailed instructions in the Webhook API panel. The guide includes:
 
 ### Rate Limiting
 
-- 10 requests per minute per API key
+- 10 requests per minute per IP address
 - Rate limit headers included in response:
   - `X-RateLimit-Limit`
   - `X-RateLimit-Remaining`
@@ -130,7 +127,6 @@ See the detailed instructions in the Webhook API panel. The guide includes:
 ### Error Responses
 
 - `400` - Bad Request (invalid URL)
-- `401` - Unauthorized (invalid/missing API key)
 - `429` - Too Many Requests (rate limit exceeded)
 - `500` - Internal Server Error
 
@@ -143,16 +139,14 @@ See the detailed instructions in the Webhook API panel. The guide includes:
 
 ## Security
 
-- API key authentication required for webhook endpoint
-- Rate limiting per API key
-- LinkedIn URL validation (SSRF protection)
-- Constant-time API key comparison
+- Rate limiting per IP address
+- URL validation (SSRF protection)
 - HTTPS only in production
 
 ## Limitations
 
 - Public profiles only (no authentication required)
-- Rate limited to 10 requests/minute per API key
+- Rate limited to 10 requests/minute per IP address
 - Vercel free tier: 10s timeout (upgrade to 60s)
 - Some profile sections may be limited if profile is partially private
 

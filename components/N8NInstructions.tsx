@@ -4,10 +4,9 @@ import { useState } from 'react';
 
 interface N8NInstructionsProps {
   webhookUrl: string;
-  apiKey: string;
 }
 
-export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsProps) {
+export default function N8NInstructions({ webhookUrl }: N8NInstructionsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const workflowExample = {
@@ -26,10 +25,6 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
           sendHeaders: true,
           headerParameters: {
             parameters: [
-              {
-                name: 'X-API-Key',
-                value: apiKey || 'your-api-key-here',
-              },
               {
                 name: 'Content-Type',
                 value: 'application/json',
@@ -81,7 +76,6 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
             <h3 className="font-bold text-xl mb-4 text-gray-100">Prerequisites</h3>
             <ul className="list-disc list-inside space-y-2 ml-2 text-gray-400">
               <li>Active N8N instance (cloud or self-hosted)</li>
-              <li>API key from your Vercel deployment environment variables</li>
               <li>URL to scrape (LinkedIn profile, Instagram profile, or any website)</li>
             </ul>
           </div>
@@ -120,18 +114,7 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
             </div>
 
             <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-5">
-              <h4 className="font-bold text-lg mb-3 text-blue-300">Step 4: Add Authentication Header</h4>
-              <ol className="list-decimal list-inside space-y-2 ml-2 text-gray-300">
-                <li>Scroll down to <strong className="text-gray-200">&quot;Headers&quot;</strong> section</li>
-                <li>Click <strong className="text-gray-200">&quot;Add Header&quot;</strong> button</li>
-                <li>Set <strong className="text-gray-200">&quot;Name&quot;</strong> to: <code className="bg-gray-800 px-2 py-1 rounded text-blue-300">X-API-Key</code></li>
-                <li>Set <strong className="text-gray-200">&quot;Value&quot;</strong> to your API key</li>
-                <li className="mt-3 text-sm text-gray-400">💡 <strong>Tip:</strong> For security, use N8N credentials feature to store your API key securely</li>
-              </ol>
-            </div>
-
-            <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-5">
-              <h4 className="font-bold text-lg mb-3 text-blue-300">Step 5: Configure Request Body</h4>
+              <h4 className="font-bold text-lg mb-3 text-blue-300">Step 4: Configure Request Body</h4>
               <ol className="list-decimal list-inside space-y-2 ml-2 text-gray-300">
                 <li>Scroll to <strong className="text-gray-200">&quot;Send Body&quot;</strong> section</li>
                 <li>Enable <strong className="text-gray-200">&quot;Send Body&quot;</strong> toggle</li>
@@ -155,7 +138,7 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
             </div>
 
             <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-5">
-              <h4 className="font-bold text-lg mb-3 text-blue-300">Step 6: Add Trigger Node</h4>
+              <h4 className="font-bold text-lg mb-3 text-blue-300">Step 5: Add Trigger Node</h4>
               <ol className="list-decimal list-inside space-y-2 ml-2 text-gray-300">
                 <li>Search for <strong className="text-gray-200">&quot;Manual Trigger&quot;</strong> or <strong className="text-gray-200">&quot;Webhook&quot;</strong> node</li>
                 <li>Add it before the HTTP Request node</li>
@@ -166,7 +149,7 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
             </div>
 
             <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-5">
-              <h4 className="font-bold text-lg mb-3 text-blue-300">Step 7: Handle Response Data</h4>
+              <h4 className="font-bold text-lg mb-3 text-blue-300">Step 6: Handle Response Data</h4>
               <ol className="list-decimal list-inside space-y-2 ml-2 text-gray-300">
                 <li>Add a <strong className="text-gray-200">&quot;Set&quot;</strong> node after the HTTP Request node</li>
                 <li>Extract specific fields using expressions:
@@ -180,12 +163,12 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
             </div>
 
             <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-5">
-              <h4 className="font-bold text-lg mb-3 text-blue-300">Step 8: Error Handling</h4>
+              <h4 className="font-bold text-lg mb-3 text-blue-300">Step 7: Error Handling</h4>
               <ol className="list-decimal list-inside space-y-2 ml-2 text-gray-300">
                 <li>In the HTTP Request node, enable <strong className="text-gray-200">&quot;Continue On Fail&quot;</strong></li>
                 <li>Add an <strong className="text-gray-200">&quot;IF&quot;</strong> node after the HTTP Request</li>
                 <li>Check status code: <code className="bg-gray-800 px-2 py-1 rounded text-blue-300">{`{{ $json.statusCode }}`}</code></li>
-                <li>Branch on success (200) vs errors (401, 429, 500)</li>
+                <li>Branch on success (200) vs errors (429, 500)</li>
                 <li>Add error notification or retry logic as needed</li>
               </ol>
             </div>
@@ -235,18 +218,9 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
             <h3 className="font-bold text-xl mb-4 text-gray-100">Troubleshooting</h3>
             <div className="space-y-4">
               <div className="bg-yellow-950/30 border border-yellow-800/50 p-4 rounded-lg">
-                <h4 className="font-bold mb-2 text-yellow-300">401 Unauthorized</h4>
-                <ul className="list-disc list-inside space-y-1 ml-2 text-sm text-gray-300">
-                  <li>Verify your API key is correct in the <code className="bg-gray-800 px-1 rounded text-yellow-300">X-API-Key</code> header</li>
-                  <li>Check that the API key matches the one set in your Vercel environment variables</li>
-                  <li>Ensure there are no extra spaces or characters in the header value</li>
-                </ul>
-              </div>
-
-              <div className="bg-yellow-950/30 border border-yellow-800/50 p-4 rounded-lg">
                 <h4 className="font-bold mb-2 text-yellow-300">429 Too Many Requests</h4>
                 <ul className="list-disc list-inside space-y-1 ml-2 text-sm text-gray-300">
-                  <li>You&apos;ve exceeded the rate limit (10 requests per minute per API key)</li>
+                  <li>You&apos;ve exceeded the rate limit (10 requests per minute per IP address)</li>
                   <li>Add a delay node between requests in your workflow</li>
                   <li>Use N8N&apos;s queue feature to manage request frequency</li>
                   <li>Check the <code className="bg-gray-800 px-1 rounded text-yellow-300">Retry-After</code> header in the response</li>
@@ -278,7 +252,6 @@ export default function N8NInstructions({ webhookUrl, apiKey }: N8NInstructionsP
           <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-6">
             <h3 className="font-bold text-xl mb-4 text-gray-100">Best Practices</h3>
             <ul className="list-disc list-inside space-y-2 ml-2 text-gray-300">
-              <li>Store your API key securely using N8N&apos;s credential management feature</li>
               <li>Implement rate limiting in your workflow to avoid hitting API limits</li>
               <li>Add error handling and retry logic for failed requests</li>
               <li>Use webhook nodes to trigger scrapes from external systems</li>

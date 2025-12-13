@@ -22,9 +22,10 @@ function cleanupOldEntries() {
 
 /**
  * Check if request is within rate limit
+ * Uses IP address or identifier to track rate limits
  * Returns true if allowed, false if rate limited
  */
-export function checkRateLimit(apiKey: string): {
+export function checkRateLimit(identifier: string): {
   allowed: boolean;
   remaining: number;
   resetTime: number;
@@ -32,11 +33,11 @@ export function checkRateLimit(apiKey: string): {
   cleanupOldEntries();
 
   const now = Date.now();
-  const entry = rateLimitStore.get(apiKey);
+  const entry = rateLimitStore.get(identifier);
 
   if (!entry || entry.resetTime < now) {
     // Create new entry or reset expired one
-    rateLimitStore.set(apiKey, {
+    rateLimitStore.set(identifier, {
       count: 1,
       resetTime: now + RATE_LIMIT_WINDOW_MS,
     });

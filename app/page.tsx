@@ -15,19 +15,13 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   // Webhook panel state
-  const [apiKey, setApiKey] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [webhookRequest, setWebhookRequest] = useState<any>(null);
   const [webhookResponse, setWebhookResponse] = useState<any>(null);
   const [webhookLoading, setWebhookLoading] = useState(false);
 
-  // Load API key from localStorage on mount
+  // Get current deployment URL on mount
   useEffect(() => {
-    const savedApiKey = localStorage.getItem('linkedin_scraper_api_key');
-    if (savedApiKey) {
-      setApiKey(savedApiKey);
-    }
-    // Get current deployment URL
     const currentUrl = typeof window !== 'undefined' ? window.location.origin : '';
     setWebhookUrl(`${currentUrl}/api/scrape`);
   }, []);
@@ -47,7 +41,6 @@ export default function Home() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': apiKey,
         },
         body: JSON.stringify({ url: linkedInUrl }),
       });
@@ -76,11 +69,6 @@ export default function Home() {
       return;
     }
 
-    if (!apiKey.trim()) {
-      setError('Please enter your API key');
-      return;
-    }
-
     setWebhookLoading(true);
     setError(null);
     setWebhookRequest(null);
@@ -91,7 +79,6 @@ export default function Home() {
       url: webhookUrl,
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': apiKey,
       },
       body: {
         url: linkedInUrl,
@@ -105,7 +92,6 @@ export default function Home() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': apiKey,
         },
         body: JSON.stringify({ url: linkedInUrl }),
       });
@@ -171,14 +157,6 @@ export default function Home() {
     navigator.clipboard.writeText(text);
   };
 
-  const handleSaveApiKey = () => {
-    if (apiKey) {
-      localStorage.setItem('linkedin_scraper_api_key', apiKey);
-      alert('API key saved to browser storage');
-    } else {
-      localStorage.removeItem('linkedin_scraper_api_key');
-    }
-  };
 
   return (
     <main className="min-h-screen bg-gray-950">
@@ -242,19 +220,6 @@ export default function Home() {
               <div className="space-y-6">
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-gray-300 mb-3">
-                    API Key <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Enter your API key"
-                    className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-transparent text-gray-100 placeholder-gray-500 transition-all"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-gray-300 mb-3">
                     Profile/Website URL <span className="text-red-400">*</span>
                   </label>
                   <div className="flex gap-3">
@@ -267,7 +232,7 @@ export default function Home() {
                     />
                     <button
                       onClick={handleScrape}
-                      disabled={scraping || !apiKey}
+                      disabled={scraping}
                       className="px-8 py-3 bg-linkedin text-white font-semibold rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-linkedin/20 hover:shadow-linkedin/30"
                     >
                       {scraping ? (
@@ -332,27 +297,6 @@ export default function Home() {
             ) : (
               /* Webhook Panel */
               <div className="space-y-6">
-                <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-gray-300 mb-3">
-                    API Key
-                  </label>
-                  <div className="flex gap-3">
-                    <input
-                      type="password"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="Enter your API key"
-                      className="flex-1 px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-transparent text-gray-100 placeholder-gray-500 transition-all"
-                    />
-                    <button
-                      onClick={handleSaveApiKey}
-                      className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium rounded-lg transition-all duration-200 border border-gray-700 hover:border-gray-600"
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-gray-300 mb-3">
                     Webhook URL
@@ -437,7 +381,7 @@ export default function Home() {
                 )}
 
                 {/* N8N Instructions */}
-                <N8NInstructions webhookUrl={webhookUrl} apiKey={apiKey} />
+                <N8NInstructions webhookUrl={webhookUrl} />
               </div>
             )}
           </div>
