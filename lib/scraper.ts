@@ -1142,13 +1142,19 @@ export async function scrapeProfileProgressive(
     let launchOptions: any;
 
     if (isServerless) {
+      // Configure Chromium for serverless environment
       chromium.setGraphicsMode = false;
+      
       const execPath = await chromium.executablePath();
       const chromiumArgs = chromium.args;
       const headlessMode = chromium.headless === true || chromium.headless === "new" ? true : false;
 
-      if (execPath && !existsSync(execPath)) {
-        throw new Error(`Chromium executable not found at: ${execPath}`);
+      // Note: existsSync check removed - it can fail in serverless environments
+      // even when the bundled Chromium from @sparticuz/chromium is valid.
+      // The bundled Chromium includes all necessary libraries and should work without this check.
+      
+      if (!execPath) {
+        throw new Error('Failed to get Chromium executable path from @sparticuz/chromium');
       }
 
       launchOptions = {
