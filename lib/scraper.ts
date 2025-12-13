@@ -1114,6 +1114,7 @@ export async function scrapeProfileProgressive(
 
   const platform = detectPlatform(url);
   let browser: any = null;
+  let context: any = null;
   const startTime = Date.now();
   const MAX_EXECUTION_TIME = 9000; // 9 seconds max, 1s buffer
 
@@ -1190,10 +1191,12 @@ export async function scrapeProfileProgressive(
     }
 
     browser = await playwrightChromium.launch(launchOptions);
-    const page = await browser.newPage();
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    );
+    // In Playwright 1.57.0+, setUserAgent is not available on Page object
+    // Instead, create a context with userAgent and create pages from that context
+    context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    });
+    const page = await context.newPage();
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 4000 });
 
