@@ -644,6 +644,22 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
         }
       }
     }
+
+    // Log extraction results
+    await logDebug({ 
+      message: 'LinkedIn extraction complete', 
+      data: { 
+        url,
+        name: { found: !!data.name, length: data.name.length },
+        headline: { found: !!data.headline, length: data.headline.length },
+        location: { found: !!data.location, length: data.location.length },
+        about: { found: !!data.about, length: data.about.length },
+        experienceCount: data.experience.length,
+        educationCount: data.education.length,
+        skillsCount: data.skills.length,
+      } 
+    });
+  } catch (e) {
     console.error('Error extracting LinkedIn data:', e);
     await logDebug({ message: 'Error in extractLinkedInProfile', data: { error: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined } });
   }
