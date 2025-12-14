@@ -178,16 +178,56 @@ async function findElementWithFallbacks(page: any, selectors: string[], fieldNam
   
   for (const selector of selectors) {
     try {
+      // Try waiting for selector first (with short timeout)
+      try {
+        await page.waitForSelector(selector, { timeout: 1000, state: 'attached' });
+      } catch (e) {
+        // Continue if selector not found, we'll try querySelector
+      }
+      
       const element = await page.$(selector);
       if (element) {
+        // Verify element is visible and has content
+        const isVisible = await element.isVisible().catch(() => true);
         const text = await element.textContent().catch(() => '');
-        await logDebug({ message: `Element found for ${fieldName}`, data: { selector, found: true, textPreview: text.substring(0, 100) } });
-        return element;
+        if (isVisible && text.trim().length > 0) {
+          await logDebug({ message: `Element found for ${fieldName}`, data: { selector, found: true, textPreview: text.substring(0, 100), isVisible } });
+          return element;
+        } else {
+          await logDebug({ message: `Element found but not usable for ${fieldName}`, data: { selector, isVisible, hasText: text.trim().length > 0 } });
+        }
       } else {
         await logDebug({ message: `Selector returned null for ${fieldName}`, data: { selector, fieldName } });
       }
     } catch (e) {
       await logDebug({ message: `Selector error for ${fieldName}`, data: { selector, error: e instanceof Error ? e.message : String(e), fieldName } });
+    }
+  }
+  
+  // If no element found, try using evaluate as fallback for name field
+  if (fieldName === 'name') {
+    try {
+      const nameHandle = await page.evaluateHandle(() => {
+        // Try multiple strategies to find name
+        const h1s = Array.from(document.querySelectorAll('h1'));
+        for (const h1 of h1s) {
+          const text = h1.textContent?.trim() || '';
+          // Look for h1 that looks like a name (2-4 words, starts with letter, reasonable length)
+          if (text.length > 3 && text.length < 100 && /^[A-Za-z]/.test(text) && text.split(/\s+/).length <= 5 && !text.toLowerCase().includes('sign in')) {
+            return h1;
+          }
+        }
+        return null;
+      });
+      if (nameHandle && nameHandle.asElement()) {
+        const text = await nameHandle.asElement()!.textContent().catch(() => '');
+        if (text.trim().length > 0) {
+          await logDebug({ message: `Found name using evaluate fallback`, data: { name: text.substring(0, 50) } });
+          return nameHandle.asElement();
+        }
+      }
+    } catch (e) {
+      await logDebug({ message: `Evaluate fallback failed for name`, data: { error: e instanceof Error ? e.message : String(e) } });
     }
   }
   
