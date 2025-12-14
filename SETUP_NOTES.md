@@ -1,4 +1,4 @@
-# Setup Notes for 21 SIXTY Scrapper
+# Setup Notes for 21SIXTY SCRAPER
 
 ## Logo and Favicon Setup
 

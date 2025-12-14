@@ -5,7 +5,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: '21 SIXTY Scrapper',
+  title: '21SIXTY SCRAPER',
   description: 'Multi-platform scraper for LinkedIn, Instagram, and websites with webhook API support',
   icons: {
     icon: '/favicons/favicon.ico',

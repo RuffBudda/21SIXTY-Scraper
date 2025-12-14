@@ -167,14 +167,14 @@ export default function Home() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src="/logos/logo.png" 
-              alt="21 SIXTY Scrapper Logo" 
+              alt="21SIXTY SCRAPER Logo" 
               className="h-20 w-20 rounded-xl shadow-lg" 
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
               }} 
             />
             <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-              21 SIXTY Scrapper
+              21SIXTY SCRAPER
             </h1>
           </div>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed">

@@ -171,29 +171,76 @@ async function extractFirstLastVisibleText(page: any): Promise<{ firstVisibleTex
 }
 
 /**
+ * Helper function to find element using multiple fallback selectors
+ */
+async function findElementWithFallbacks(page: any, selectors: string[]): Promise<any> {
+  for (const selector of selectors) {
+    try {
+      const element = await page.$(selector);
+      if (element) {
+        await logDebug({ message: 'Element found', selector, data: { found: true } });
+        return element;
+      }
+    } catch (e) {
+      // Continue to next selector
+    }
+  }
+  await logDebug({ message: 'Element not found with any selector', selectors, data: { found: false } });
+  return null;
+}
+
+/**
+ * Helper function to get text content from element with fallbacks
+ */
+async function getTextWithFallbacks(page: any, selectors: string[]): Promise<string> {
+  const element = await findElementWithFallbacks(page, selectors);
+  if (element) {
+    try {
+      const text = (await element.textContent())?.trim() || '';
+      return text;
+    } catch (e) {
+      return '';
+    }
+  }
+  return '';
+}
+
+/**
  * Expands all collapsed content on the page
  */
 async function expandCollapsedContent(page: any) {
   try {
-    await page.waitForLoadState('domcontentloaded', { timeout: 3000 });
+    await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
+    await page.waitForTimeout(500); // Additional wait for dynamic content
 
     const showMoreSelectors = [
       'button[aria-label*="Show more"]',
+      'button[aria-label*="show more"]',
       'button:has-text("Show more")',
+      'button:has-text("show more")',
+      'button:has-text("See more")',
       'button:has-text("see more")',
       '.pvs-navigation__text:has-text("Show more")',
       'button.pvs-profile-actions__action--more',
-      'button:has-text("more")',
-      '[aria-expanded="false"]',
+      'button.pvs-list__paged-list-item button',
+      'button[aria-expanded="false"]',
+      'span:has-text("Show more")',
+      'a:has-text("Show more")',
+      '[data-control-name="show_more"]',
     ];
 
+    let clickedCount = 0;
     for (const selector of showMoreSelectors) {
       try {
         const buttons = await page.$$(selector);
         for (const button of buttons) {
           try {
-            await button.click({ timeout: 500 });
-            await page.waitForTimeout(100);
+            const isVisible = await button.isVisible().catch(() => false);
+            if (isVisible) {
+              await button.click({ timeout: 1000 });
+              await page.waitForTimeout(200);
+              clickedCount++;
+            }
           } catch (e) {
             // Ignore errors
           }
@@ -207,13 +254,56 @@ async function expandCollapsedContent(page: any) {
     await page.evaluate(() => {
       window.scrollTo(0, document.body.scrollHeight);
     });
+    await page.waitForTimeout(500);
+    
+    // Scroll back up gradually
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight / 2);
+    });
     await page.waitForTimeout(200);
+    
     await page.evaluate(() => {
       window.scrollTo(0, 0);
     });
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(300);
+    
+    await logDebug({ message: 'Expanded collapsed content', data: { clickedButtons: clickedCount } });
   } catch (e) {
     console.error('Error expanding collapsed content:', e);
+    await logDebug({ message: 'Error expanding content', data: { error: e.message } });
+  }
+}
+
+/**
+ * Checks if LinkedIn is showing login wall or blocking access
+ */
+async function checkLinkedInLoginWall(page: any): Promise<boolean> {
+  try {
+    const pageText = await page.textContent('body').catch(() => '');
+    const pageUrl = page.url();
+    
+    // Check for login indicators
+    const loginIndicators = [
+      'Sign in',
+      'Join now',
+      'Welcome to your professional community',
+      'linkedin.com/login',
+      'authwall',
+    ];
+    
+    const hasLoginIndicator = loginIndicators.some(indicator => 
+      pageText.toLowerCase().includes(indicator.toLowerCase()) || 
+      pageUrl.toLowerCase().includes(indicator.toLowerCase())
+    );
+    
+    if (hasLoginIndicator && !pageUrl.includes('/in/')) {
+      await logDebug({ message: 'LinkedIn login wall detected', data: { url: pageUrl } });
+      return true;
+    }
+    
+    return false;
+  } catch (e) {
+    return false;
   }
 }
 
@@ -236,58 +326,173 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
   };
 
   try {
-    // Name
-    const nameElement = await page.$('h1.text-heading-xlarge, h1.pv-text-details__left-panel h1');
-    if (nameElement) {
-      data.name = (await nameElement.textContent())?.trim() || '';
+    // Check for login wall
+    const isLoginWall = await checkLinkedInLoginWall(page);
+    if (isLoginWall) {
+      await logDebug({ message: 'LinkedIn login wall detected, returning empty data', data: { url } });
+      return data;
     }
 
-    // Headline
-    const headlineElement = await page.$('.text-body-medium.break-words, .pv-text-details__left-panel .text-body-medium');
-    if (headlineElement) {
-      data.headline = (await headlineElement.textContent())?.trim() || '';
-    }
+    // Wait for page to be ready
+    await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
+    await page.waitForTimeout(1000);
 
-    // Location
-    const locationElement = await page.$('.text-body-small.inline.t-black--light.break-words, .pv-text-details__left-panel .text-body-small');
-    if (locationElement) {
-      data.location = (await locationElement.textContent())?.trim() || '';
-    }
+    // Name - try multiple selectors
+    const nameSelectors = [
+      'h1.text-heading-xlarge',
+      'h1[data-generated-suggestion-target]',
+      'main h1',
+      'h1.top-card-layout__title',
+      'main section:first-of-type h1',
+      'h1.pv-text-details__left-panel h1',
+      'h1.text-heading-xlarge.inline',
+      'h1.break-words',
+    ];
+    data.name = await getTextWithFallbacks(page, nameSelectors);
+
+    // Headline - try multiple selectors
+    const headlineSelectors = [
+      '.text-body-medium.break-words',
+      '.top-card-layout__headline',
+      'main section:first-of-type .text-body-medium',
+      'main section:first-of-type p',
+      '.pv-text-details__left-panel .text-body-medium',
+      '.text-body-medium',
+      'div[data-generated-suggestion-target] + div',
+    ];
+    data.headline = await getTextWithFallbacks(page, headlineSelectors);
+
+    // Location - try multiple selectors
+    const locationSelectors = [
+      '.text-body-small.inline.t-black--light.break-words',
+      '.top-card-layout__first-subline',
+      'main section:first-of-type .text-body-small',
+      'main section:first-of-type span[aria-label*="location"]',
+      '.pv-text-details__left-panel .text-body-small',
+      'span.text-body-small',
+      '.text-body-small.inline',
+    ];
+    data.location = await getTextWithFallbacks(page, locationSelectors);
 
     // About section
     try {
-      const aboutSection = await page.$('section#about, [data-section="summary"]');
+      const aboutSectionSelectors = [
+        'section#about',
+        '[data-section="summary"]',
+        'section[data-section="summary"]',
+        '#about',
+        'section.about',
+      ];
+      
+      const aboutSection = await findElementWithFallbacks(page, aboutSectionSelectors);
       if (aboutSection) {
-        const aboutText = await aboutSection.$('.inline-show-more-text, .pv-about-section .pv-about__summary-text');
-        if (aboutText) {
-          data.about = (await aboutText.textContent())?.trim() || '';
+        const aboutTextSelectors = [
+          '.inline-show-more-text',
+          '.pv-about-section .pv-about__summary-text',
+          '.break-words',
+          'span[aria-hidden="true"]',
+          'div[data-generated-suggestion-target]',
+        ];
+        
+        // Try to expand "Show more" in about section
+        try {
+          const showMoreBtn = await aboutSection.$('button:has-text("Show more"), button[aria-label*="Show more"]');
+          if (showMoreBtn) {
+            await showMoreBtn.click({ timeout: 1000 });
+            await page.waitForTimeout(500);
+          }
+        } catch (e) {
+          // Continue if button not found
+        }
+        
+        for (const selector of aboutTextSelectors) {
+          try {
+            const aboutText = await aboutSection.$(selector);
+            if (aboutText) {
+              const text = (await aboutText.textContent())?.trim() || '';
+              if (text.length > 10) {
+                data.about = text;
+                break;
+              }
+            }
+          } catch (e) {
+            // Continue to next selector
+          }
         }
       }
     } catch (e) {
-      // Continue if about section not found
+      await logDebug({ message: 'Error extracting about section', data: { error: e.message } });
     }
 
     // Experience
     try {
-      const experienceSection = await page.$('section#experience, [data-section="experience"]');
+      const experienceSectionSelectors = [
+        'section#experience',
+        '[data-section="experience"]',
+        'section[data-section="experience"]',
+        '#experience',
+      ];
+      
+      const experienceSection = await findElementWithFallbacks(page, experienceSectionSelectors);
       if (experienceSection) {
-        const experienceItems = await experienceSection.$$('.pvs-list__paged-list-item, .pvs-list li');
+        const experienceItems = await experienceSection.$$('.pvs-list__paged-list-item, .pvs-list li, ul.pvs-list > li');
+        
         for (const item of experienceItems) {
           try {
-            const titleElement = await item.$('.mr1.t-bold span[aria-hidden="true"], h3 span[aria-hidden="true"]');
-            const companyElement = await item.$('.t-14.t-normal span[aria-hidden="true"], .t-14 span[aria-hidden="true"]');
-            const dateElement = await item.$('.t-14.t-normal.t-black--light span[aria-hidden="true"], .t-14.t-black--light span[aria-hidden="true"]');
-            const descElement = await item.$('.inline-show-more-text, .pvs-list__outer-container .t-14');
+            const titleSelectors = [
+              '.mr1.t-bold span[aria-hidden="true"]',
+              'h3 span[aria-hidden="true"]',
+              'h3',
+              '.t-bold span',
+              'span[aria-hidden="true"]',
+            ];
+            
+            const companySelectors = [
+              '.t-14.t-normal span[aria-hidden="true"]',
+              '.t-14 span[aria-hidden="true"]',
+              '.text-body-small',
+              'span.t-14',
+            ];
+            
+            const dateSelectors = [
+              '.t-14.t-normal.t-black--light span[aria-hidden="true"]',
+              '.t-14.t-black--light span[aria-hidden="true"]',
+              '.text-body-small.t-black--light',
+              'span.t-black--light',
+            ];
+            
+            const descSelectors = [
+              '.inline-show-more-text',
+              '.pvs-list__outer-container .t-14',
+              '.t-14',
+              '.break-words',
+            ];
 
-            const experience: ExperienceItem = {
-              title: (await titleElement?.textContent())?.trim() || '',
-              company: (await companyElement?.textContent())?.trim() || '',
-              startDate: (await dateElement?.textContent())?.trim() || '',
-              description: (await descElement?.textContent())?.trim() || '',
-            };
+            const title = await getTextWithFallbacks(item, titleSelectors);
+            const company = await getTextWithFallbacks(item, companySelectors);
+            const startDate = await getTextWithFallbacks(item, dateSelectors);
+            
+            // Try to expand description
+            let description = '';
+            try {
+              const showMoreBtn = await item.$('button:has-text("Show more"), button[aria-label*="Show more"]');
+              if (showMoreBtn) {
+                await showMoreBtn.click({ timeout: 500 });
+                await page.waitForTimeout(300);
+              }
+            } catch (e) {
+              // Continue
+            }
+            
+            description = await getTextWithFallbacks(item, descSelectors);
 
-            if (experience.title) {
-              data.experience.push(experience);
+            if (title) {
+              data.experience.push({
+                title,
+                company,
+                startDate,
+                description,
+              });
             }
           } catch (e) {
             // Skip malformed entries
@@ -295,28 +500,53 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
         }
       }
     } catch (e) {
-      // Continue if experience section not found
+      await logDebug({ message: 'Error extracting experience', data: { error: e.message } });
     }
 
     // Education
     try {
-      const educationSection = await page.$('section#education, [data-section="education"]');
+      const educationSectionSelectors = [
+        'section#education',
+        '[data-section="education"]',
+        'section[data-section="education"]',
+        '#education',
+      ];
+      
+      const educationSection = await findElementWithFallbacks(page, educationSectionSelectors);
       if (educationSection) {
-        const educationItems = await educationSection.$$('.pvs-list__paged-list-item, .pvs-list li');
+        const educationItems = await educationSection.$$('.pvs-list__paged-list-item, .pvs-list li, ul.pvs-list > li');
+        
         for (const item of educationItems) {
           try {
-            const schoolElement = await item.$('.mr1.t-bold span[aria-hidden="true"], h3 span[aria-hidden="true"]');
-            const degreeElement = await item.$('.t-14.t-normal span[aria-hidden="true"], .t-14 span[aria-hidden="true"]');
-            const dateElement = await item.$('.t-14.t-normal.t-black--light span[aria-hidden="true"]');
+            const schoolSelectors = [
+              '.mr1.t-bold span[aria-hidden="true"]',
+              'h3 span[aria-hidden="true"]',
+              'h3',
+              '.t-bold span',
+            ];
+            
+            const degreeSelectors = [
+              '.t-14.t-normal span[aria-hidden="true"]',
+              '.t-14 span[aria-hidden="true"]',
+              '.text-body-small',
+            ];
+            
+            const dateSelectors = [
+              '.t-14.t-normal.t-black--light span[aria-hidden="true"]',
+              '.t-14.t-black--light span[aria-hidden="true"]',
+              'span.t-black--light',
+            ];
 
-            const education: EducationItem = {
-              school: (await schoolElement?.textContent())?.trim() || '',
-              degree: (await degreeElement?.textContent())?.trim() || '',
-              startDate: (await dateElement?.textContent())?.trim() || '',
-            };
+            const school = await getTextWithFallbacks(item, schoolSelectors);
+            const degree = await getTextWithFallbacks(item, degreeSelectors);
+            const startDate = await getTextWithFallbacks(item, dateSelectors);
 
-            if (education.school) {
-              data.education.push(education);
+            if (school) {
+              data.education.push({
+                school,
+                degree,
+                startDate,
+              });
             }
           } catch (e) {
             // Skip malformed entries
@@ -324,36 +554,82 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
         }
       }
     } catch (e) {
-      // Continue if education section not found
+      await logDebug({ message: 'Error extracting education', data: { error: e.message } });
     }
 
     // Skills
     try {
-      const skillsSection = await page.$('section#skills, [data-section="skills"]');
+      const skillsSectionSelectors = [
+        'section#skills',
+        '[data-section="skills"]',
+        'section[data-section="skills"]',
+        '#skills',
+      ];
+      
+      const skillsSection = await findElementWithFallbacks(page, skillsSectionSelectors);
       if (skillsSection) {
-        const skillElements = await skillsSection.$$('.mr1.t-bold span[aria-hidden="true"], h3 span[aria-hidden="true"]');
-        for (const element of skillElements) {
-          const skill = (await element.textContent())?.trim();
-          if (skill) {
-            data.skills.push(skill);
+        const skillSelectors = [
+          '.mr1.t-bold span[aria-hidden="true"]',
+          'h3 span[aria-hidden="true"]',
+          'h3',
+          '.t-bold span',
+          'span[aria-hidden="true"]',
+          'li span',
+        ];
+        
+        // Try multiple approaches
+        for (const selector of skillSelectors) {
+          try {
+            const skillElements = await skillsSection.$$(selector);
+            for (const element of skillElements) {
+              const skill = (await element.textContent())?.trim();
+              if (skill && skill.length > 1 && !data.skills.includes(skill)) {
+                data.skills.push(skill);
+              }
+            }
+          } catch (e) {
+            // Continue to next selector
           }
         }
       }
     } catch (e) {
-      // Continue if skills section not found
+      await logDebug({ message: 'Error extracting skills', data: { error: e.message } });
     }
 
     // Profile image
     try {
-      const profileImg = await page.$('.pv-top-card-profile-picture__image, img.pv-top-card-profile-picture__image');
+      const profileImgSelectors = [
+        '.pv-top-card-profile-picture__image',
+        'img.pv-top-card-profile-picture__image',
+        'img[alt*="profile"]',
+        'main img[alt*="profile picture"]',
+        'header img',
+        'img.profile-photo',
+      ];
+      
+      const profileImg = await findElementWithFallbacks(page, profileImgSelectors);
       if (profileImg) {
         data.profileImage = await profileImg.getAttribute('src') || undefined;
       }
     } catch (e) {
-      // Continue if image not found
+      await logDebug({ message: 'Error extracting profile image', data: { error: e.message } });
     }
+    
+    await logDebug({ 
+      message: 'LinkedIn extraction complete', 
+      data: { 
+        name: data.name ? 'found' : 'empty',
+        headline: data.headline ? 'found' : 'empty',
+        location: data.location ? 'found' : 'empty',
+        about: data.about ? 'found' : 'empty',
+        experienceCount: data.experience.length,
+        educationCount: data.education.length,
+        skillsCount: data.skills.length,
+      } 
+    });
   } catch (e) {
     console.error('Error extracting LinkedIn data:', e);
+    await logDebug({ message: 'Error in extractLinkedInProfile', data: { error: e.message, stack: e.stack } });
   }
 
   return data;
@@ -648,146 +924,348 @@ async function extractLinkedInProfileProgressive(
   };
 
   try {
+    // Check for login wall
+    const isLoginWall = await checkLinkedInLoginWall(page);
+    if (isLoginWall) {
+      await logDebug({ message: 'LinkedIn login wall detected in progressive extraction', data: { url } });
+      return data;
+    }
+
+    // Wait for page to be ready
+    await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
+    await page.waitForTimeout(1000);
+
     // Extract name if not already scraped
     if (!continuation.scrapedSections.includes('name')) {
-      try {
-        const nameElement = await page.$('h1.text-heading-xlarge, h1.pv-text-details__left-panel h1');
-        if (nameElement) {
-          data.name = (await nameElement.textContent())?.trim() || '';
-          continuation.scrapedSections.push('name');
-        }
-      } catch (e) {}
+      const nameSelectors = [
+        'h1.text-heading-xlarge',
+        'h1[data-generated-suggestion-target]',
+        'main h1',
+        'h1.top-card-layout__title',
+        'main section:first-of-type h1',
+        'h1.pv-text-details__left-panel h1',
+        'h1.text-heading-xlarge.inline',
+        'h1.break-words',
+      ];
+      const name = await getTextWithFallbacks(page, nameSelectors);
+      if (name) {
+        data.name = name;
+        continuation.scrapedSections.push('name');
+      }
     }
 
     // Extract headline if not already scraped
     if (!continuation.scrapedSections.includes('headline')) {
-      try {
-        const headlineElement = await page.$('.text-body-medium.break-words, .pv-text-details__left-panel .text-body-medium');
-        if (headlineElement) {
-          data.headline = (await headlineElement.textContent())?.trim() || '';
-          continuation.scrapedSections.push('headline');
-        }
-      } catch (e) {}
+      const headlineSelectors = [
+        '.text-body-medium.break-words',
+        '.top-card-layout__headline',
+        'main section:first-of-type .text-body-medium',
+        'main section:first-of-type p',
+        '.pv-text-details__left-panel .text-body-medium',
+        '.text-body-medium',
+        'div[data-generated-suggestion-target] + div',
+      ];
+      const headline = await getTextWithFallbacks(page, headlineSelectors);
+      if (headline) {
+        data.headline = headline;
+        continuation.scrapedSections.push('headline');
+      }
     }
 
     // Extract location if not already scraped
     if (!continuation.scrapedSections.includes('location')) {
-      try {
-        const locationElement = await page.$('.text-body-small.inline.t-black--light.break-words, .pv-text-details__left-panel .text-body-small');
-        if (locationElement) {
-          data.location = (await locationElement.textContent())?.trim() || '';
-          continuation.scrapedSections.push('location');
-        }
-      } catch (e) {}
+      const locationSelectors = [
+        '.text-body-small.inline.t-black--light.break-words',
+        '.top-card-layout__first-subline',
+        'main section:first-of-type .text-body-small',
+        'main section:first-of-type span[aria-label*="location"]',
+        '.pv-text-details__left-panel .text-body-small',
+        'span.text-body-small',
+        '.text-body-small.inline',
+      ];
+      const location = await getTextWithFallbacks(page, locationSelectors);
+      if (location) {
+        data.location = location;
+        continuation.scrapedSections.push('location');
+      }
     }
 
     // Extract about section if not already scraped
     if (!continuation.scrapedSections.includes('about')) {
       try {
-        const aboutSection = await page.$('section#about, [data-section="summary"]');
+        const aboutSectionSelectors = [
+          'section#about',
+          '[data-section="summary"]',
+          'section[data-section="summary"]',
+          '#about',
+          'section.about',
+        ];
+        
+        const aboutSection = await findElementWithFallbacks(page, aboutSectionSelectors);
         if (aboutSection) {
-          const aboutText = await aboutSection.$('.inline-show-more-text, .pv-about-section .pv-about__summary-text');
-          if (aboutText) {
-            data.about = (await aboutText.textContent())?.trim() || '';
-            continuation.scrapedSections.push('about');
+          // Try to expand "Show more" in about section
+          try {
+            const showMoreBtn = await aboutSection.$('button:has-text("Show more"), button[aria-label*="Show more"]');
+            if (showMoreBtn) {
+              await showMoreBtn.click({ timeout: 1000 });
+              await page.waitForTimeout(500);
+            }
+          } catch (e) {
+            // Continue if button not found
+          }
+          
+          const aboutTextSelectors = [
+            '.inline-show-more-text',
+            '.pv-about-section .pv-about__summary-text',
+            '.break-words',
+            'span[aria-hidden="true"]',
+            'div[data-generated-suggestion-target]',
+          ];
+          
+          for (const selector of aboutTextSelectors) {
+            try {
+              const aboutText = await aboutSection.$(selector);
+              if (aboutText) {
+                const text = (await aboutText.textContent())?.trim() || '';
+                if (text.length > 10) {
+                  data.about = text;
+                  continuation.scrapedSections.push('about');
+                  break;
+                }
+              }
+            } catch (e) {
+              // Continue to next selector
+            }
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        await logDebug({ message: 'Error extracting about section progressively', data: { error: e.message } });
+      }
     }
 
     // Extract experience (continue from last index)
     if (!continuation.scrapedSections.includes('experience-complete')) {
       try {
-        const experienceSection = await page.$('section#experience, [data-section="experience"]');
+        const experienceSectionSelectors = [
+          'section#experience',
+          '[data-section="experience"]',
+          'section[data-section="experience"]',
+          '#experience',
+        ];
+        
+        const experienceSection = await findElementWithFallbacks(page, experienceSectionSelectors);
         if (experienceSection) {
-          const experienceItems = await experienceSection.$$('.pvs-list__paged-list-item, .pvs-list li');
+          const experienceItems = await experienceSection.$$('.pvs-list__paged-list-item, .pvs-list li, ul.pvs-list > li');
           const startIndex = continuation.lastScrapedIndex;
+          
           for (let i = startIndex; i < experienceItems.length; i++) {
             try {
               const item = experienceItems[i];
-              const titleElement = await item.$('.mr1.t-bold span[aria-hidden="true"], h3 span[aria-hidden="true"]');
-              const companyElement = await item.$('.t-14.t-normal span[aria-hidden="true"], .t-14 span[aria-hidden="true"]');
-              const dateElement = await item.$('.t-14.t-normal.t-black--light span[aria-hidden="true"], .t-14.t-black--light span[aria-hidden="true"]');
-              const descElement = await item.$('.inline-show-more-text, .pvs-list__outer-container .t-14');
+              
+              const titleSelectors = [
+                '.mr1.t-bold span[aria-hidden="true"]',
+                'h3 span[aria-hidden="true"]',
+                'h3',
+                '.t-bold span',
+                'span[aria-hidden="true"]',
+              ];
+              
+              const companySelectors = [
+                '.t-14.t-normal span[aria-hidden="true"]',
+                '.t-14 span[aria-hidden="true"]',
+                '.text-body-small',
+                'span.t-14',
+              ];
+              
+              const dateSelectors = [
+                '.t-14.t-normal.t-black--light span[aria-hidden="true"]',
+                '.t-14.t-black--light span[aria-hidden="true"]',
+                '.text-body-small.t-black--light',
+                'span.t-black--light',
+              ];
+              
+              const descSelectors = [
+                '.inline-show-more-text',
+                '.pvs-list__outer-container .t-14',
+                '.t-14',
+                '.break-words',
+              ];
 
-              const experience: ExperienceItem = {
-                title: (await titleElement?.textContent())?.trim() || '',
-                company: (await companyElement?.textContent())?.trim() || '',
-                startDate: (await dateElement?.textContent())?.trim() || '',
-                description: (await descElement?.textContent())?.trim() || '',
-              };
+              const title = await getTextWithFallbacks(item, titleSelectors);
+              
+              // Try to expand description
+              try {
+                const showMoreBtn = await item.$('button:has-text("Show more"), button[aria-label*="Show more"]');
+                if (showMoreBtn) {
+                  await showMoreBtn.click({ timeout: 500 });
+                  await page.waitForTimeout(300);
+                }
+              } catch (e) {
+                // Continue
+              }
+              
+              const company = await getTextWithFallbacks(item, companySelectors);
+              const startDate = await getTextWithFallbacks(item, dateSelectors);
+              const description = await getTextWithFallbacks(item, descSelectors);
 
-              if (experience.title) {
-                data.experience.push(experience);
+              if (title) {
+                data.experience.push({
+                  title,
+                  company,
+                  startDate,
+                  description,
+                });
                 continuation.scrapedSections.push(`experience-${i}`);
                 continuation.lastScrapedIndex = i + 1;
               }
-            } catch (e) {}
+            } catch (e) {
+              // Skip malformed entries
+            }
           }
+          
           if (startIndex >= experienceItems.length) {
             continuation.scrapedSections.push('experience-complete');
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        await logDebug({ message: 'Error extracting experience progressively', data: { error: e.message } });
+      }
     }
 
     // Extract education if not already scraped
     if (!continuation.scrapedSections.includes('education')) {
       try {
-        const educationSection = await page.$('section#education, [data-section="education"]');
+        const educationSectionSelectors = [
+          'section#education',
+          '[data-section="education"]',
+          'section[data-section="education"]',
+          '#education',
+        ];
+        
+        const educationSection = await findElementWithFallbacks(page, educationSectionSelectors);
         if (educationSection) {
-          const educationItems = await educationSection.$$('.pvs-list__paged-list-item, .pvs-list li');
+          const educationItems = await educationSection.$$('.pvs-list__paged-list-item, .pvs-list li, ul.pvs-list > li');
+          
           for (const item of educationItems) {
             try {
-              const schoolElement = await item.$('.mr1.t-bold span[aria-hidden="true"], h3 span[aria-hidden="true"]');
-              const degreeElement = await item.$('.t-14.t-normal span[aria-hidden="true"], .t-14 span[aria-hidden="true"]');
-              const dateElement = await item.$('.t-14.t-normal.t-black--light span[aria-hidden="true"]');
+              const schoolSelectors = [
+                '.mr1.t-bold span[aria-hidden="true"]',
+                'h3 span[aria-hidden="true"]',
+                'h3',
+                '.t-bold span',
+              ];
+              
+              const degreeSelectors = [
+                '.t-14.t-normal span[aria-hidden="true"]',
+                '.t-14 span[aria-hidden="true"]',
+                '.text-body-small',
+              ];
+              
+              const dateSelectors = [
+                '.t-14.t-normal.t-black--light span[aria-hidden="true"]',
+                '.t-14.t-black--light span[aria-hidden="true"]',
+                'span.t-black--light',
+              ];
 
-              const education: EducationItem = {
-                school: (await schoolElement?.textContent())?.trim() || '',
-                degree: (await degreeElement?.textContent())?.trim() || '',
-                startDate: (await dateElement?.textContent())?.trim() || '',
-              };
+              const school = await getTextWithFallbacks(item, schoolSelectors);
+              const degree = await getTextWithFallbacks(item, degreeSelectors);
+              const startDate = await getTextWithFallbacks(item, dateSelectors);
 
-              if (education.school) {
-                data.education.push(education);
+              if (school) {
+                data.education.push({
+                  school,
+                  degree,
+                  startDate,
+                });
               }
-            } catch (e) {}
+            } catch (e) {
+              // Skip malformed entries
+            }
           }
           continuation.scrapedSections.push('education');
         }
-      } catch (e) {}
+      } catch (e) {
+        await logDebug({ message: 'Error extracting education progressively', data: { error: e.message } });
+      }
     }
 
     // Extract skills if not already scraped
     if (!continuation.scrapedSections.includes('skills')) {
       try {
-        const skillsSection = await page.$('section#skills, [data-section="skills"]');
+        const skillsSectionSelectors = [
+          'section#skills',
+          '[data-section="skills"]',
+          'section[data-section="skills"]',
+          '#skills',
+        ];
+        
+        const skillsSection = await findElementWithFallbacks(page, skillsSectionSelectors);
         if (skillsSection) {
-          const skillElements = await skillsSection.$$('.mr1.t-bold span[aria-hidden="true"], h3 span[aria-hidden="true"]');
-          for (const element of skillElements) {
-            const skill = (await element.textContent())?.trim();
-            if (skill) {
-              data.skills.push(skill);
+          const skillSelectors = [
+            '.mr1.t-bold span[aria-hidden="true"]',
+            'h3 span[aria-hidden="true"]',
+            'h3',
+            '.t-bold span',
+            'span[aria-hidden="true"]',
+            'li span',
+          ];
+          
+          // Try multiple approaches
+          for (const selector of skillSelectors) {
+            try {
+              const skillElements = await skillsSection.$$(selector);
+              for (const element of skillElements) {
+                const skill = (await element.textContent())?.trim();
+                if (skill && skill.length > 1 && !data.skills.includes(skill)) {
+                  data.skills.push(skill);
+                }
+              }
+            } catch (e) {
+              // Continue to next selector
             }
           }
           continuation.scrapedSections.push('skills');
         }
-      } catch (e) {}
+      } catch (e) {
+        await logDebug({ message: 'Error extracting skills progressively', data: { error: e.message } });
+      }
     }
 
     // Extract profile image if not already scraped
     if (!continuation.scrapedSections.includes('profileImage')) {
       try {
-        const profileImg = await page.$('.pv-top-card-profile-picture__image, img.pv-top-card-profile-picture__image');
+        const profileImgSelectors = [
+          '.pv-top-card-profile-picture__image',
+          'img.pv-top-card-profile-picture__image',
+          'img[alt*="profile"]',
+          'main img[alt*="profile picture"]',
+          'header img',
+          'img.profile-photo',
+        ];
+        
+        const profileImg = await findElementWithFallbacks(page, profileImgSelectors);
         if (profileImg) {
           data.profileImage = await profileImg.getAttribute('src') || undefined;
           continuation.scrapedSections.push('profileImage');
         }
-      } catch (e) {}
+      } catch (e) {
+        await logDebug({ message: 'Error extracting profile image progressively', data: { error: e.message } });
+      }
     }
+    
+    await logDebug({ 
+      message: 'LinkedIn progressive extraction update', 
+      data: { 
+        scrapedSections: continuation.scrapedSections,
+        name: data.name ? 'found' : 'empty',
+        experienceCount: data.experience.length,
+        educationCount: data.education.length,
+        skillsCount: data.skills.length,
+      } 
+    });
   } catch (e) {
     console.error('Error extracting LinkedIn data progressively:', e);
+    await logDebug({ message: 'Error in extractLinkedInProfileProgressive', data: { error: e.message, stack: e.stack } });
   }
 
   return data;

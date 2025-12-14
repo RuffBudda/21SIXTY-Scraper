@@ -38,7 +38,7 @@ git push -u origin main
 
 1. Go to your repository page on GitHub
 2. You should see all your files uploaded
-3. The repository should show the commit message: "Initial commit: 21 SIXTY Scrapper..."
+3. The repository should show the commit message: "Initial commit: 21SIXTY SCRAPER..."
 
 ## Additional Notes
 

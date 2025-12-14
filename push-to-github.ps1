@@ -1,7 +1,7 @@
 # PowerShell script to push to GitHub
 # This will prompt for your GitHub username and help you set up the remote
 
-Write-Host "=== 21 SIXTY Scrapper - GitHub Push Helper ===" -ForegroundColor Cyan
+Write-Host "=== 21SIXTY SCRAPER - GitHub Push Helper ===" -ForegroundColor Cyan
 Write-Host ""
 
 # Get GitHub username

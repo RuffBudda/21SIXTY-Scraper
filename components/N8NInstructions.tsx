@@ -10,7 +10,7 @@ export default function N8NInstructions({ webhookUrl }: N8NInstructionsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const workflowExample = {
-    name: '21 SIXTY Scrapper',
+    name: '21SIXTY SCRAPER',
     nodes: [
       {
         parameters: {},
