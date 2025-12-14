@@ -431,37 +431,82 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
 
   try {
     // Wait for page to be ready
-    await page.waitForLoadState('domcontentloaded', { timeout: 3000 });
-    await page.waitForTimeout(1000); // Reduced wait for faster execution
+    await page.waitForLoadState('networkidle', { timeout: 8000 });
+    await page.waitForTimeout(2000); // Give page time to render
     
-    // Check for login wall after page loads
-    const isLoginWall = await checkLinkedInLoginWall(page);
-    if (isLoginWall) {
-      await logDebug({ message: 'LinkedIn login wall detected, returning empty data', data: { url } });
-      return data;
+    // Check page URL to see if we're on the right page
+    const currentUrl = page.url();
+    await logDebug({ message: 'Current page URL', data: { url: currentUrl } });
+    
+    // Check for login wall after page loads (but be less aggressive)
+    // Only check login wall if we can't find basic elements after waiting
+    try {
+      const testElement = await page.$('main h1, h1, main').catch(() => null);
+      if (!testElement) {
+        const isLoginWall = await checkLinkedInLoginWall(page);
+        if (isLoginWall) {
+          await logDebug({ message: 'LinkedIn login wall detected, returning empty data', data: { url, currentUrl } });
+          return data;
+        }
+      }
+    } catch (e) {
+      // Continue even if check fails
     }
     
-    // Wait for main content to load
+    // Wait for main content to load - try multiple strategies
     try {
       await page.waitForSelector('main', { timeout: 5000 });
+      await page.waitForTimeout(1000); // Additional wait for content
     } catch (e) {
-      await logDebug({ message: 'Main content not found, may be login wall', data: { url } });
+      await logDebug({ message: 'Main content not found, trying body instead', data: { url, error: e instanceof Error ? e.message : String(e) } });
+      // Try waiting for body if main doesn't exist
+      try {
+        await page.waitForSelector('body', { timeout: 3000 });
+      } catch (e2) {
+        await logDebug({ message: 'Body not found either', data: { url } });
+      }
     }
+    
+    // Get page title for debugging
+    const pageTitle = await page.title().catch(() => '');
+    await logDebug({ message: 'Page title', data: { title: pageTitle } });
+    
+    // Get some basic page info for debugging
+    try {
+      const bodyText = await page.evaluate(() => document.body.textContent?.substring(0, 200) || '').catch(() => '');
+      await logDebug({ message: 'Page body preview', data: { preview: bodyText } });
+    } catch (e) {}
 
-    // Name - try multiple selectors
+    // Name - try multiple selectors, including more generic ones
     const nameSelectors = [
       'main h1.text-heading-xlarge',
-      'main h1',
       'h1.text-heading-xlarge',
+      'main h1',
       'h1[data-generated-suggestion-target]',
       'h1.top-card-layout__title',
       'main section:first-of-type h1',
       'h1.pv-text-details__left-panel h1',
       'h1.text-heading-xlarge.inline',
       'h1.break-words',
+      'h1',
+      '.ph5 h1',
+      '[data-test-id="profile-name"] h1',
+      '.pv-text-details__left-panel h1',
     ];
     data.name = await getTextWithFallbacks(page, nameSelectors, true, 'name');
     await logDebug({ message: 'Name extraction complete', data: { found: !!data.name, name: data.name.substring(0, 50), length: data.name.length } });
+    
+    // If name is still empty, try using page title as fallback
+    if (!data.name && pageTitle) {
+      const titleParts = pageTitle.split('|');
+      if (titleParts.length > 0) {
+        const potentialName = titleParts[0].trim();
+        if (potentialName && potentialName.length > 2 && potentialName.length < 100) {
+          data.name = potentialName;
+          await logDebug({ message: 'Using page title as name fallback', data: { name: data.name } });
+        }
+      }
+    }
 
     // Headline - try multiple selectors
     const headlineSelectors = [
@@ -472,17 +517,25 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       'main h1 ~ .text-body-medium',
       '.text-body-medium.break-words',
       '.text-body-medium',
+      'main h1 + div .text-body-medium',
+      '.ph5 .text-body-medium',
+      '[data-test-id="profile-headline"]',
+      'main section .text-body-medium:first-of-type',
     ];
     data.headline = await getTextWithFallbacks(page, headlineSelectors, true, 'headline');
     await logDebug({ message: 'Headline extraction complete', data: { found: !!data.headline, length: data.headline.length, preview: data.headline.substring(0, 100) } });
 
     // Location - try multiple selectors (more specific, avoid login prompts)
     const locationSelectors = [
-      'main .text-body-small.inline.t-black--light.break-words:not([aria-label*="Sign"])',
+      'main .text-body-small.inline.t-black--light.break-words',
       'main .top-card-layout__first-subline',
-      'main section:first-of-type .text-body-small:not([aria-label*="Sign"]):not(:has-text("Sign in"))',
+      'main section:first-of-type .text-body-small',
       'main span[aria-label*="location"]',
       '.pv-text-details__left-panel .text-body-small:first-of-type',
+      'main .text-body-small.t-black--light',
+      '.ph5 .text-body-small.t-black--light',
+      '[data-test-id="profile-location"]',
+      'main section .text-body-small:first-of-type',
     ];
     let locationText = await getTextWithFallbacks(page, locationSelectors);
     // Additional cleaning for location - remove everything after "Contact Info" or login prompts
@@ -1940,7 +1993,9 @@ export async function scrapeProfileProgressive(
     });
     const page = await context.newPage();
 
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 4000 });
+    // Navigate with longer timeout and wait for network idle
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 10000 });
+    await page.waitForTimeout(2000); // Give page time to fully render
 
     // PRIORITY: Extract first and last visible text immediately
     if (!firstVisibleText || !lastVisibleText) {
