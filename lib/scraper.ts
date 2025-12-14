@@ -270,7 +270,7 @@ async function expandCollapsedContent(page: any) {
     await logDebug({ message: 'Expanded collapsed content', data: { clickedButtons: clickedCount } });
   } catch (e) {
     console.error('Error expanding collapsed content:', e);
-    await logDebug({ message: 'Error expanding content', data: { error: e.message } });
+    await logDebug({ message: 'Error expanding content', data: { error: e instanceof Error ? e.message : String(e) } });
   }
 }
 
@@ -500,7 +500,7 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
         }
       }
     } catch (e) {
-      await logDebug({ message: 'Error extracting experience', data: { error: e.message } });
+      await logDebug({ message: 'Error extracting experience', data: { error: e instanceof Error ? e.message : String(e) } });
     }
 
     // Education
@@ -554,7 +554,7 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
         }
       }
     } catch (e) {
-      await logDebug({ message: 'Error extracting education', data: { error: e.message } });
+      await logDebug({ message: 'Error extracting education', data: { error: e instanceof Error ? e.message : String(e) } });
     }
 
     // Skills
@@ -593,7 +593,7 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
         }
       }
     } catch (e) {
-      await logDebug({ message: 'Error extracting skills', data: { error: e.message } });
+      await logDebug({ message: 'Error extracting skills', data: { error: e instanceof Error ? e.message : String(e) } });
     }
 
     // Profile image
@@ -629,7 +629,7 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
     });
   } catch (e) {
     console.error('Error extracting LinkedIn data:', e);
-    await logDebug({ message: 'Error in extractLinkedInProfile', data: { error: e.message, stack: e.stack } });
+    await logDebug({ message: 'Error in extractLinkedInProfile', data: { error: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined } });
   }
 
   return data;
@@ -1128,7 +1128,7 @@ async function extractLinkedInProfileProgressive(
           }
         }
       } catch (e) {
-        await logDebug({ message: 'Error extracting experience progressively', data: { error: e.message } });
+        await logDebug({ message: 'Error extracting experience progressively', data: { error: e instanceof Error ? e.message : String(e) } });
       }
     }
 
@@ -1227,7 +1227,7 @@ async function extractLinkedInProfileProgressive(
           continuation.scrapedSections.push('skills');
         }
       } catch (e) {
-        await logDebug({ message: 'Error extracting skills progressively', data: { error: e.message } });
+        await logDebug({ message: 'Error extracting skills progressively', data: { error: e instanceof Error ? e.message : String(e) } });
       }
     }
 
@@ -1249,7 +1249,7 @@ async function extractLinkedInProfileProgressive(
           continuation.scrapedSections.push('profileImage');
         }
       } catch (e) {
-        await logDebug({ message: 'Error extracting profile image progressively', data: { error: e.message } });
+        await logDebug({ message: 'Error extracting profile image progressively', data: { error: e instanceof Error ? e.message : String(e) } });
       }
     }
     
@@ -1265,7 +1265,7 @@ async function extractLinkedInProfileProgressive(
     });
   } catch (e) {
     console.error('Error extracting LinkedIn data progressively:', e);
-    await logDebug({ message: 'Error in extractLinkedInProfileProgressive', data: { error: e.message, stack: e.stack } });
+    await logDebug({ message: 'Error in extractLinkedInProfileProgressive', data: { error: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined } });
   }
 
   return data;
