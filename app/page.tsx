@@ -45,6 +45,14 @@ export default function Home() {
         body: JSON.stringify({ url: linkedInUrl }),
       });
 
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        // Response is not JSON (likely HTML error page from Vercel timeout)
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${response.status === 504 ? 'Request timeout - the scraping took too long. Please try again or use a simpler profile.' : 'Unexpected response format'}`);
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
@@ -57,7 +65,12 @@ export default function Home() {
         throw new Error(data.error || 'No data received');
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred while scraping');
+      // Handle JSON parsing errors specifically
+      if (err instanceof SyntaxError && err.message.includes('JSON')) {
+        setError('Server returned invalid response. This may be due to a timeout. Please try again.');
+      } else {
+        setError(err.message || 'An error occurred while scraping');
+      }
     } finally {
       setScraping(false);
     }
@@ -96,7 +109,20 @@ export default function Home() {
         body: JSON.stringify({ url: linkedInUrl }),
       });
 
-      const data = await response.json();
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (!contentType || !contentType.includes('application/json')) {
+        // Response is not JSON (likely HTML error page from Vercel timeout)
+        const text = await response.text();
+        data = {
+          success: false,
+          error: `Server error (${response.status}): ${response.status === 504 ? 'Request timeout - the scraping took too long' : 'Unexpected response format'}`,
+          rawResponse: text.substring(0, 200),
+        };
+      } else {
+        data = await response.json();
+      }
 
       setWebhookResponse({
         status: response.status,

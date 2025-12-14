@@ -4,6 +4,9 @@ import { scrapeProfileProgressive } from '@/lib/scraper';
 import { ScrapeResponse, ScrapeContinuation } from '@/lib/types';
 import { getContinuation, setContinuation } from '@/lib/continuationStore';
 
+// Set max duration for Vercel (free tier: 10s, we use 8s to be safe)
+export const maxDuration = 10;
+
 export async function POST(request: NextRequest) {
   try {
     // Check rate limiting using IP address
@@ -70,7 +73,8 @@ export async function POST(request: NextRequest) {
 
     // Scrape profile progressively (supports continuation)
     // Add timeout wrapper to prevent 504 errors
-    const TIMEOUT_MS = 50000; // 50 seconds (Vercel free tier is 10s, but we'll try to finish faster)
+    // Vercel free tier has 10s limit, so we set timeout to 8s to ensure we return JSON before Vercel times out
+    const TIMEOUT_MS = 8000; // 8 seconds - well under Vercel's 10s limit
     
     const scrapePromise = scrapeProfileProgressive(targetUrl, continuation || undefined);
     const timeoutPromise = new Promise((_, reject) => 

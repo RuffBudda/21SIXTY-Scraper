@@ -1854,7 +1854,7 @@ export async function scrapeProfileProgressive(
   let browser: any = null;
   let context: any = null;
   const startTime = Date.now();
-  const MAX_EXECUTION_TIME = 9000; // 9 seconds max, 1s buffer
+  const MAX_EXECUTION_TIME = 7000; // 7 seconds max, 3s buffer for Vercel's 10s limit
 
   // Initialize or load continuation state
   let continuationState: ScrapeContinuation = continuation || {
