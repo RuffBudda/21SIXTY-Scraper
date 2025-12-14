@@ -1140,6 +1140,7 @@ async function extractLinkedInProfileProgressive(
         continuation.scrapedSections.push('name');
       } else {
         // Try using page title as fallback
+        const pageTitle = await page.title().catch(() => '');
         if (pageTitle) {
           const titleParts = pageTitle.split('|');
           if (titleParts.length > 0) {
