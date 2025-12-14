@@ -421,7 +421,7 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
         }
       }
     } catch (e) {
-      await logDebug({ message: 'Error extracting about section', data: { error: e.message } });
+      await logDebug({ message: 'Error extracting about section', data: { error: e instanceof Error ? e.message : String(e) } });
     }
 
     // Experience
@@ -612,7 +612,7 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
         data.profileImage = await profileImg.getAttribute('src') || undefined;
       }
     } catch (e) {
-      await logDebug({ message: 'Error extracting profile image', data: { error: e.message } });
+      await logDebug({ message: 'Error extracting profile image', data: { error: e instanceof Error ? e.message : String(e) } });
     }
     
     await logDebug({ 
@@ -1039,7 +1039,7 @@ async function extractLinkedInProfileProgressive(
           }
         }
       } catch (e) {
-        await logDebug({ message: 'Error extracting about section progressively', data: { error: e.message } });
+        await logDebug({ message: 'Error extracting about section progressively', data: { error: e instanceof Error ? e.message : String(e) } });
       }
     }
 
@@ -1185,7 +1185,7 @@ async function extractLinkedInProfileProgressive(
           continuation.scrapedSections.push('education');
         }
       } catch (e) {
-        await logDebug({ message: 'Error extracting education progressively', data: { error: e.message } });
+        await logDebug({ message: 'Error extracting education progressively', data: { error: e instanceof Error ? e.message : String(e) } });
       }
     }
 
