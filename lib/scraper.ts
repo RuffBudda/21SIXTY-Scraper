@@ -352,17 +352,20 @@ async function checkLinkedInLoginWall(page: any): Promise<boolean> {
       return true;
     }
     
-    // Check for specific login indicators in main content
+    // Check for specific login indicators in main content - but be less aggressive
+    // Only trigger if we see multiple strong indicators
     const mainContent = await page.$('main').catch(() => null);
     if (mainContent) {
       const mainText = await mainContent.textContent().catch(() => '');
-      const loginIndicators = ['Sign in to view', 'Welcome back', 'Email or phone'];
-      const hasLoginIndicator = loginIndicators.some(indicator => 
+      const strongLoginIndicators = ['Welcome back', 'Email or phone', 'Password'];
+      const strongIndicatorCount = strongLoginIndicators.filter(indicator => 
         mainText.toLowerCase().includes(indicator.toLowerCase())
-      );
+      ).length;
       
-      if (hasLoginIndicator) {
-        await logDebug({ message: 'LinkedIn login wall detected in main content', data: { url: pageUrl } });
+      // Only consider it a login wall if we see multiple strong indicators AND the profile name is missing
+      const hasProfileName = await page.$('main h1').catch(() => null);
+      if (strongIndicatorCount >= 2 && !hasProfileName) {
+        await logDebug({ message: 'LinkedIn login wall detected in main content', data: { url: pageUrl, indicatorCount: strongIndicatorCount } });
         return true;
       }
     }
@@ -412,9 +415,10 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
 
     // Name - try multiple selectors
     const nameSelectors = [
+      'main h1.text-heading-xlarge',
+      'main h1',
       'h1.text-heading-xlarge',
       'h1[data-generated-suggestion-target]',
-      'main h1',
       'h1.top-card-layout__title',
       'main section:first-of-type h1',
       'h1.pv-text-details__left-panel h1',
@@ -422,16 +426,20 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       'h1.break-words',
     ];
     data.name = await getTextWithFallbacks(page, nameSelectors);
+    await logDebug({ message: 'Name extraction', data: { found: !!data.name, name: data.name.substring(0, 50) } });
 
-    // Headline - try multiple selectors (more specific to avoid login prompts)
+    // Headline - try multiple selectors
     const headlineSelectors = [
       'main h1 + .text-body-medium.break-words',
       'main .top-card-layout__headline',
-      'main section:first-of-type .text-body-medium:not([aria-label*="Sign"])',
+      'main section:first-of-type .text-body-medium',
       '.pv-text-details__left-panel .text-body-medium',
       'main h1 ~ .text-body-medium',
+      '.text-body-medium.break-words',
+      '.text-body-medium',
     ];
     data.headline = await getTextWithFallbacks(page, headlineSelectors);
+    await logDebug({ message: 'Headline extraction', data: { found: !!data.headline, length: data.headline.length } });
 
     // Location - try multiple selectors (more specific, avoid login prompts)
     const locationSelectors = [
@@ -531,11 +539,13 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       ];
       
       const experienceSection = await findElementWithFallbacks(page, experienceSectionSelectors);
+      await logDebug({ message: 'Experience section', data: { found: !!experienceSection } });
       if (experienceSection) {
         // Wait a bit for content to load
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(1000);
         
         const experienceItems = await experienceSection.$$('.pvs-list__paged-list-item, .pvs-list li, ul.pvs-list > li, .pvs-list__outer-container > li');
+        await logDebug({ message: 'Experience items found', data: { count: experienceItems.length } });
         
         for (const item of experienceItems) {
           try {
