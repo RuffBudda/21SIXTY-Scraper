@@ -1246,39 +1246,80 @@ async function extractLinkedInProfileProgressive(
 
   try {
     // Wait for page to be ready
-    await page.waitForLoadState('domcontentloaded', { timeout: 3000 });
-    await page.waitForTimeout(1000); // Reduced wait for faster execution
+    await page.waitForLoadState('networkidle', { timeout: 8000 });
+    await page.waitForTimeout(2000); // Give page time to render
     
-    // Check for login wall after page loads
-    const isLoginWall = await checkLinkedInLoginWall(page);
-    if (isLoginWall) {
-      await logDebug({ message: 'LinkedIn login wall detected in progressive extraction', data: { url } });
-      return data;
+    // Check page URL to see if we're on the right page
+    const currentUrl = page.url();
+    await logDebug({ message: 'Current page URL in progressive extraction', data: { url: currentUrl } });
+    
+    // Check for login wall after page loads (but be less aggressive)
+    // Only check login wall if we can't find basic elements after waiting
+    try {
+      const testElement = await page.$('main h1, h1, main').catch(() => null);
+      if (!testElement) {
+        const isLoginWall = await checkLinkedInLoginWall(page);
+        if (isLoginWall) {
+          await logDebug({ message: 'LinkedIn login wall detected in progressive extraction', data: { url, currentUrl } });
+          return data;
+        }
+      }
+    } catch (e) {
+      // Continue even if check fails
     }
     
-    // Wait for main content to load
+    // Wait for main content to load - try multiple strategies
     try {
       await page.waitForSelector('main', { timeout: 5000 });
+      await page.waitForTimeout(1000); // Additional wait for content
     } catch (e) {
-      await logDebug({ message: 'Main content not found in progressive extraction', data: { url } });
+      await logDebug({ message: 'Main content not found in progressive extraction, trying body instead', data: { url, error: e instanceof Error ? e.message : String(e) } });
+      // Try waiting for body if main doesn't exist
+      try {
+        await page.waitForSelector('body', { timeout: 3000 });
+      } catch (e2) {
+        await logDebug({ message: 'Body not found either', data: { url } });
+      }
     }
+    
+    // Get page title for debugging
+    const pageTitle = await page.title().catch(() => '');
+    await logDebug({ message: 'Page title in progressive extraction', data: { title: pageTitle } });
 
     // Extract name if not already scraped
     if (!continuation.scrapedSections.includes('name')) {
       const nameSelectors = [
+        'main h1.text-heading-xlarge',
         'h1.text-heading-xlarge',
-        'h1[data-generated-suggestion-target]',
         'main h1',
+        'h1[data-generated-suggestion-target]',
         'h1.top-card-layout__title',
         'main section:first-of-type h1',
         'h1.pv-text-details__left-panel h1',
         'h1.text-heading-xlarge.inline',
         'h1.break-words',
+        'h1',
+        '.ph5 h1',
+        '[data-test-id="profile-name"] h1',
+        '.pv-text-details__left-panel h1',
       ];
-      const name = await getTextWithFallbacks(page, nameSelectors);
+      const name = await getTextWithFallbacks(page, nameSelectors, true, 'name');
       if (name) {
         data.name = name;
         continuation.scrapedSections.push('name');
+      } else {
+        // Try using page title as fallback
+        if (pageTitle) {
+          const titleParts = pageTitle.split('|');
+          if (titleParts.length > 0) {
+            const potentialName = titleParts[0].trim();
+            if (potentialName && potentialName.length > 2 && potentialName.length < 100) {
+              data.name = potentialName;
+              continuation.scrapedSections.push('name');
+              await logDebug({ message: 'Using page title as name fallback in progressive extraction', data: { name: data.name } });
+            }
+          }
+        }
       }
     }
 
@@ -1287,11 +1328,17 @@ async function extractLinkedInProfileProgressive(
       const headlineSelectors = [
         'main h1 + .text-body-medium.break-words',
         'main .top-card-layout__headline',
-        'main section:first-of-type .text-body-medium:not([aria-label*="Sign"])',
+        'main section:first-of-type .text-body-medium',
         '.pv-text-details__left-panel .text-body-medium',
         'main h1 ~ .text-body-medium',
+        '.text-body-medium.break-words',
+        '.text-body-medium',
+        'main h1 + div .text-body-medium',
+        '.ph5 .text-body-medium',
+        '[data-test-id="profile-headline"]',
+        'main section .text-body-medium:first-of-type',
       ];
-      const headline = await getTextWithFallbacks(page, headlineSelectors);
+      const headline = await getTextWithFallbacks(page, headlineSelectors, true, 'headline');
       if (headline) {
         data.headline = headline;
         continuation.scrapedSections.push('headline');
