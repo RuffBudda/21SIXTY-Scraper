@@ -69,7 +69,52 @@ export async function POST(request: NextRequest) {
     }
 
     // Scrape profile progressively (supports continuation)
-    const result = await scrapeProfileProgressive(targetUrl, continuation || undefined);
+    // Add timeout wrapper to prevent 504 errors
+    const TIMEOUT_MS = 50000; // 50 seconds (Vercel free tier is 10s, but we'll try to finish faster)
+    
+    const scrapePromise = scrapeProfileProgressive(targetUrl, continuation || undefined);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Request timeout - scraping took too long')), TIMEOUT_MS)
+    );
+    
+    let result;
+    try {
+      result = await Promise.race([scrapePromise, timeoutPromise]) as any;
+    } catch (error: any) {
+      // If timeout or other error, return partial data if available
+      console.error('Scraping error or timeout:', error);
+      
+      // Try to get partial result if available
+      try {
+        const partialResult = await scrapePromise.catch(() => null);
+        if (partialResult) {
+          return NextResponse.json({
+            success: true,
+            platform: partialResult.data.platform,
+            data: partialResult.data,
+            timestamp: new Date().toISOString(),
+            url: targetUrl,
+            isComplete: false,
+            error: 'Partial results due to timeout',
+            firstVisibleText: partialResult.firstVisibleText,
+            lastVisibleText: partialResult.lastVisibleText,
+          });
+        }
+      } catch (e) {
+        // Ignore
+      }
+      
+      // Return error as valid JSON
+      return NextResponse.json(
+        {
+          success: false,
+          error: error.message || 'Scraping timeout or error occurred',
+          timestamp: new Date().toISOString(),
+          url: targetUrl,
+        },
+        { status: 504 }
+      );
+    }
 
     // Generate and store continuation token if scraping is incomplete
     let token: string | undefined;

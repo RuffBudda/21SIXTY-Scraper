@@ -518,16 +518,17 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
           'div[data-generated-suggestion-target]',
         ];
         
-        // Try to expand "Show more" in about section
-        try {
-          const showMoreBtn = await aboutSection.$('button:has-text("Show more"), button[aria-label*="Show more"]');
-          if (showMoreBtn) {
-            await showMoreBtn.click({ timeout: 1000 });
-            await page.waitForTimeout(500);
-          }
-        } catch (e) {
-          // Continue if button not found
-        }
+        // Try to expand "Show more" in about section (skip to save time)
+        // Skipping expansion for now to prevent timeout
+        // try {
+        //   const showMoreBtn = await aboutSection.$('button:has-text("Show more"), button[aria-label*="Show more"]');
+        //   if (showMoreBtn) {
+        //     await showMoreBtn.click({ timeout: 1000 });
+        //     await page.waitForTimeout(500);
+        //   }
+        // } catch (e) {
+        //   // Continue if button not found
+        // }
         
         for (const selector of aboutTextSelectors) {
           try {
@@ -560,10 +561,10 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       await page.evaluate(() => {
         const experienceSection = document.querySelector('section#experience, [data-section="experience"]');
         if (experienceSection) {
-          experienceSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          experienceSection.scrollIntoView({ behavior: 'auto', block: 'start' });
         }
       });
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(500); // Reduced from 1000ms
       
       const experienceSectionSelectors = [
         'section#experience',
@@ -577,7 +578,7 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       await logDebug({ message: 'Experience section check', data: { found: !!experienceSection } });
       if (experienceSection) {
         // Wait a bit for content to load
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(300); // Reduced from 1000ms
         
         const experienceItems = await experienceSection.$$('.pvs-list__paged-list-item, .pvs-list li, ul.pvs-list > li, .pvs-list__outer-container > li');
         await logDebug({ message: 'Experience items found', data: { count: experienceItems.length } });
@@ -664,10 +665,10 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       await page.evaluate(() => {
         const educationSection = document.querySelector('section#education, [data-section="education"]');
         if (educationSection) {
-          educationSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          educationSection.scrollIntoView({ behavior: 'auto', block: 'start' });
         }
       });
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(500); // Reduced from 1000ms
       
       const educationSectionSelectors = [
         'section#education',
@@ -731,10 +732,10 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       await page.evaluate(() => {
         const skillsSection = document.querySelector('section#skills, [data-section="skills"]');
         if (skillsSection) {
-          skillsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          skillsSection.scrollIntoView({ behavior: 'auto', block: 'start' });
         }
       });
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(500); // Reduced from 1000ms
       
       const skillsSectionSelectors = [
         'section#skills',
@@ -748,14 +749,14 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       await logDebug({ message: 'Skills section check', data: { found: !!skillsSection } });
       if (skillsSection) {
         // Wait a bit for content to load
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(300); // Reduced from 1000ms
         
         // Try to expand "Show more" for skills
         try {
           const showMoreBtn = await skillsSection.$('button:has-text("Show more"), button[aria-label*="Show more"]');
           if (showMoreBtn) {
-            await showMoreBtn.click({ timeout: 1000 });
-            await page.waitForTimeout(500);
+            await showMoreBtn.click({ timeout: 500 });
+            await page.waitForTimeout(200); // Reduced from 500ms
           }
         } catch (e) {
           // Continue if button not found
@@ -1333,16 +1334,17 @@ async function extractLinkedInProfileProgressive(
 
               const title = await getTextWithFallbacks(item, titleSelectors);
               
-              // Try to expand description
-              try {
-                const showMoreBtn = await item.$('button:has-text("Show more"), button[aria-label*="Show more"]');
-                if (showMoreBtn) {
-                  await showMoreBtn.click({ timeout: 500 });
-                  await page.waitForTimeout(300);
-                }
-              } catch (e) {
-                // Continue
-              }
+              // Try to expand description (skip to save time)
+              // Skipping expansion for now to prevent timeout
+              // try {
+              //   const showMoreBtn = await item.$('button:has-text("Show more"), button[aria-label*="Show more"]');
+              //   if (showMoreBtn) {
+              //     await showMoreBtn.click({ timeout: 500 });
+              //     await page.waitForTimeout(300);
+              //   }
+              // } catch (e) {
+              //   // Continue
+              // }
               
               const company = await getTextWithFallbacks(item, companySelectors);
               const startDate = await getTextWithFallbacks(item, dateSelectors);
