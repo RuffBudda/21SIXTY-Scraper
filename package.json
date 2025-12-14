@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "npx playwright install chromium || echo 'Note: Playwright browsers installation skipped. Run: npx playwright install chromium'",
+    "postinstall": "node -e \"if (process.env.VERCEL) { console.log('Skipping Playwright browser install on Vercel - using @sparticuz/chromium'); } else { require('child_process').exec('npx playwright install chromium', (err) => { if (err) console.log('Note: Playwright browsers installation skipped. Run: npx playwright install chromium'); }); }\"",
     "install-browsers": "npx playwright install chromium"
   },
   "dependencies": {

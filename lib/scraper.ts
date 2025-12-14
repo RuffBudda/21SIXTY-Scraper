@@ -1871,11 +1871,12 @@ export async function scrapeProfileProgressive(
   let lastVisibleText = continuationState.lastVisibleText || '';
 
   try {
-    // Detect environment
+    // Detect environment - prioritize Vercel detection
     const hasAwsLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
-    const hasVercel = !!process.env.VERCEL;
+    const hasVercel = !!process.env.VERCEL || !!process.env.VERCEL_ENV;
     const hasLambdaRoot = !!process.env.LAMBDA_TASK_ROOT;
     const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+    // Always use serverless mode if on Vercel or if not in dev mode on Linux
     const isServerless = hasAwsLambda || hasVercel || hasLambdaRoot || (!isDev && process.platform === 'linux');
 
     // Use @sparticuz/chromium for serverless - optimized for Vercel/Lambda
@@ -1883,38 +1884,44 @@ export async function scrapeProfileProgressive(
     let launchOptions: any;
 
     if (isServerless) {
-      // Configure Chromium for serverless environment (Vercel/Lambda)
-      chromium.setGraphicsMode(false);
-      
-      const execPath = await chromium.executablePath();
-      const chromiumArgs = chromium.args || [];
+      try {
+        // Configure Chromium for serverless environment (Vercel/Lambda)
+        chromium.setGraphicsMode(false);
+        
+        const execPath = await chromium.executablePath();
+        const chromiumArgs = chromium.args || [];
 
-      if (!execPath) {
-        throw new Error('Failed to get Chromium executable path from @sparticuz/chromium');
+        if (!execPath) {
+          throw new Error('Failed to get Chromium executable path from @sparticuz/chromium');
+        }
+
+        // Optimized args for speed - minimal flags for faster startup
+        const serverlessArgs = [
+          ...chromiumArgs,
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--single-process', // Faster startup
+          '--disable-gpu',
+          '--disable-software-rasterizer',
+          '--disable-extensions',
+          '--disable-background-networking',
+          '--disable-background-timer-throttling',
+          '--disable-renderer-backgrounding',
+          '--disable-backgrounding-occluded-windows',
+        ];
+
+        launchOptions = {
+          args: serverlessArgs,
+          executablePath: execPath,
+          headless: true,
+        };
+      } catch (chromiumError) {
+        console.error('Error configuring @sparticuz/chromium:', chromiumError);
+        throw new Error(`Failed to configure Chromium for serverless environment: ${chromiumError instanceof Error ? chromiumError.message : String(chromiumError)}`);
       }
-
-      // Optimized args for speed - minimal flags for faster startup
-      const serverlessArgs = [
-        ...chromiumArgs,
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--single-process', // Faster startup
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--disable-extensions',
-        '--disable-background-networking',
-        '--disable-background-timer-throttling',
-        '--disable-renderer-backgrounding',
-        '--disable-backgrounding-occluded-windows',
-      ];
-
-      launchOptions = {
-        args: serverlessArgs,
-        executablePath: execPath,
-        headless: true,
-      };
     } else {
+      // Local development - use system Chromium or installed Playwright browsers
       launchOptions = {
         headless: true,
         args: [
