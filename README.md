@@ -43,6 +43,7 @@ Before you begin, ensure you have:
    ```bash
    npx playwright install chromium
    ```
+   > **Note**: For Vercel deployment, `@sparticuz/chromium` is automatically used which includes pre-bundled Chromium optimized for serverless environments.
 
 4. **Set up environment variables**
    
@@ -227,7 +228,7 @@ Content-Type: application/json
 ## 🛠️ Technical Stack
 
 - **Framework**: Next.js 14+ with App Router
-- **Scraping Engine**: Playwright with WebKit for fast, lightweight scraping optimized for Vercel free plan
+- **Scraping Engine**: Playwright with @sparticuz/chromium for serverless environments (optimized for Vercel)
 - **Styling**: Tailwind CSS for modern, responsive design
 - **Language**: TypeScript for type safety
 - **Deployment**: Optimized for Vercel serverless functions

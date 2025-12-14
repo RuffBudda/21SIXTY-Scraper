@@ -1,4 +1,5 @@
-import { webkit } from 'playwright-core';
+import chromium from '@sparticuz/chromium';
+import { chromium as playwrightChromium } from 'playwright-core';
 import { promises as fs, existsSync } from 'fs';
 import { join } from 'path';
 import { 
@@ -247,8 +248,8 @@ async function getTextWithFallbacks(page: any, selectors: string[], cleanText: b
  */
 async function expandCollapsedContent(page: any) {
   try {
-    await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
-    await page.waitForTimeout(500); // Additional wait for dynamic content
+    await page.waitForLoadState('domcontentloaded', { timeout: 3000 });
+    await page.waitForTimeout(200); // Reduced wait for faster execution
 
     const showMoreSelectors = [
       'button[aria-label*="Show more"]',
@@ -274,8 +275,8 @@ async function expandCollapsedContent(page: any) {
           try {
             const isVisible = await button.isVisible().catch(() => false);
             if (isVisible) {
-              await button.click({ timeout: 1000 });
-              await page.waitForTimeout(200);
+              await button.click({ timeout: 500 });
+              await page.waitForTimeout(100);
               clickedCount++;
             }
           } catch (e) {
@@ -291,18 +292,18 @@ async function expandCollapsedContent(page: any) {
     await page.evaluate(() => {
       window.scrollTo(0, document.body.scrollHeight);
     });
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(200);
     
     // Scroll back up gradually
     await page.evaluate(() => {
       window.scrollTo(0, document.body.scrollHeight / 2);
     });
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(100);
     
     await page.evaluate(() => {
       window.scrollTo(0, 0);
     });
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(100);
     
     await logDebug({ message: 'Expanded collapsed content', data: { clickedButtons: clickedCount } });
   } catch (e) {
@@ -430,8 +431,8 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
 
   try {
     // Wait for page to be ready
-    await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
-    await page.waitForTimeout(2000); // Give more time for dynamic content
+    await page.waitForLoadState('domcontentloaded', { timeout: 3000 });
+    await page.waitForTimeout(1000); // Reduced wait for faster execution
     
     // Check for login wall after page loads
     const isLoginWall = await checkLinkedInLoginWall(page);
@@ -1152,8 +1153,8 @@ async function extractLinkedInProfileProgressive(
 
   try {
     // Wait for page to be ready
-    await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
-    await page.waitForTimeout(2000); // Give more time for dynamic content
+    await page.waitForLoadState('domcontentloaded', { timeout: 3000 });
+    await page.waitForTimeout(1000); // Reduced wait for faster execution
     
     // Check for login wall after page loads
     const isLoginWall = await checkLinkedInLoginWall(page);
@@ -1853,7 +1854,7 @@ export async function scrapeProfileProgressive(
   let browser: any = null;
   let context: any = null;
   const startTime = Date.now();
-  const MAX_EXECUTION_TIME = 7000; // 7 seconds max, 3s buffer for Vercel's 10s limit
+  const MAX_EXECUTION_TIME = 8500; // 8.5 seconds max, 1.5s buffer for Vercel's 10s limit
 
   // Initialize or load continuation state
   let continuationState: ScrapeContinuation = continuation || {
@@ -1877,18 +1878,41 @@ export async function scrapeProfileProgressive(
     const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
     const isServerless = hasAwsLambda || hasVercel || hasLambdaRoot || (!isDev && process.platform === 'linux');
 
-    // Use WebKit for serverless - much lighter and faster than Chromium
-    // WebKit starts ~2-3x faster and uses less memory, perfect for Vercel free plan
+    // Use @sparticuz/chromium for serverless - optimized for Vercel/Lambda
+    // This is the only reliable option for serverless environments
     let launchOptions: any;
 
     if (isServerless) {
+      // Configure Chromium for serverless environment (Vercel/Lambda)
+      chromium.setGraphicsMode(false);
+      
+      const execPath = await chromium.executablePath();
+      const chromiumArgs = chromium.args || [];
+
+      if (!execPath) {
+        throw new Error('Failed to get Chromium executable path from @sparticuz/chromium');
+      }
+
+      // Optimized args for speed - minimal flags for faster startup
+      const serverlessArgs = [
+        ...chromiumArgs,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--single-process', // Faster startup
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions',
+        '--disable-background-networking',
+        '--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding',
+        '--disable-backgrounding-occluded-windows',
+      ];
+
       launchOptions = {
+        args: serverlessArgs,
+        executablePath: execPath,
         headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-        ],
       };
     } else {
       launchOptions = {
@@ -1901,11 +1925,11 @@ export async function scrapeProfileProgressive(
       };
     }
 
-    browser = await webkit.launch(launchOptions);
+    browser = await playwrightChromium.launch(launchOptions);
     // In Playwright 1.57.0+, setUserAgent is not available on Page object
     // Instead, create a context with userAgent and create pages from that context
     context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15'
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     });
     const page = await context.newPage();
 
