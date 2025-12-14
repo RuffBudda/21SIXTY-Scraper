@@ -118,10 +118,11 @@ export async function POST(request: NextRequest) {
 
     // Generate and store continuation token if scraping is incomplete
     let token: string | undefined;
-    if (!result.isComplete && result.continuation) {
-      token = result.continuation.sessionId;
-      if (token && result.continuation) {
-        setContinuation(token, result.continuation);
+    const continuation = result.continuation;
+    if (!result.isComplete && continuation) {
+      token = continuation.sessionId;
+      if (token) {
+        setContinuation(token, continuation);
       }
     }
 
