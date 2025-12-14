@@ -120,7 +120,9 @@ export async function POST(request: NextRequest) {
     let token: string | undefined;
     if (!result.isComplete && result.continuation) {
       token = result.continuation.sessionId;
-      setContinuation(token, result.continuation);
+      if (token && result.continuation) {
+        setContinuation(token, result.continuation);
+      }
     }
 
     const response: ScrapeResponse = {
