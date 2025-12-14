@@ -173,38 +173,73 @@ async function extractFirstLastVisibleText(page: any): Promise<{ firstVisibleTex
 /**
  * Helper function to find element using multiple fallback selectors
  */
-async function findElementWithFallbacks(page: any, selectors: string[]): Promise<any> {
+async function findElementWithFallbacks(page: any, selectors: string[], fieldName: string = 'unknown'): Promise<any> {
+  await logDebug({ message: `Finding element for ${fieldName}`, data: { selectors, fieldName } });
+  
   for (const selector of selectors) {
     try {
       const element = await page.$(selector);
       if (element) {
-        await logDebug({ message: 'Element found', selector, data: { found: true } });
+        const text = await element.textContent().catch(() => '');
+        await logDebug({ message: `Element found for ${fieldName}`, data: { selector, found: true, textPreview: text.substring(0, 100) } });
         return element;
+      } else {
+        await logDebug({ message: `Selector returned null for ${fieldName}`, data: { selector, fieldName } });
       }
     } catch (e) {
-      // Continue to next selector
+      await logDebug({ message: `Selector error for ${fieldName}`, data: { selector, error: e instanceof Error ? e.message : String(e), fieldName } });
     }
   }
-  await logDebug({ message: 'Element not found with any selector', selectors, data: { found: false } });
+  
+  // If no element found, try to get some context about what's on the page
+  try {
+    const pageTitle = await page.title().catch(() => '');
+    const url = page.url();
+    const hasMain = await page.$('main').catch(() => null);
+    const mainText = hasMain ? await hasMain.textContent().catch(() => '') : '';
+    
+    await logDebug({ 
+      message: `Element not found with any selector for ${fieldName}`, 
+      data: { 
+        selectors, 
+        fieldName,
+        pageTitle,
+        url,
+        hasMain: !!hasMain,
+        mainTextPreview: mainText.substring(0, 200)
+      } 
+    });
+  } catch (e) {
+    await logDebug({ message: `Failed to get page context for ${fieldName}`, data: { error: e instanceof Error ? e.message : String(e) } });
+  }
+  
   return null;
 }
 
 /**
  * Helper function to get text content from element with fallbacks
  */
-async function getTextWithFallbacks(page: any, selectors: string[], cleanText: boolean = true): Promise<string> {
-  const element = await findElementWithFallbacks(page, selectors);
+async function getTextWithFallbacks(page: any, selectors: string[], cleanText: boolean = true, fieldName: string = 'unknown'): Promise<string> {
+  const element = await findElementWithFallbacks(page, selectors, fieldName);
   if (element) {
     try {
       let text = (await element.textContent())?.trim() || '';
+      await logDebug({ message: `Raw text extracted for ${fieldName}`, data: { fieldName, length: text.length, preview: text.substring(0, 100) } });
+      
       if (cleanText) {
+        const originalLength = text.length;
         text = cleanLinkedInText(text);
+        if (originalLength !== text.length) {
+          await logDebug({ message: `Text cleaned for ${fieldName}`, data: { fieldName, originalLength, cleanedLength: text.length } });
+        }
       }
       return text;
     } catch (e) {
+      await logDebug({ message: `Error getting text for ${fieldName}`, data: { fieldName, error: e instanceof Error ? e.message : String(e) } });
       return '';
     }
   }
+  await logDebug({ message: `No text extracted for ${fieldName}`, data: { fieldName } });
   return '';
 }
 
@@ -425,8 +460,8 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       'h1.text-heading-xlarge.inline',
       'h1.break-words',
     ];
-    data.name = await getTextWithFallbacks(page, nameSelectors);
-    await logDebug({ message: 'Name extraction', data: { found: !!data.name, name: data.name.substring(0, 50) } });
+    data.name = await getTextWithFallbacks(page, nameSelectors, true, 'name');
+    await logDebug({ message: 'Name extraction complete', data: { found: !!data.name, name: data.name.substring(0, 50), length: data.name.length } });
 
     // Headline - try multiple selectors
     const headlineSelectors = [
@@ -438,8 +473,8 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       '.text-body-medium.break-words',
       '.text-body-medium',
     ];
-    data.headline = await getTextWithFallbacks(page, headlineSelectors);
-    await logDebug({ message: 'Headline extraction', data: { found: !!data.headline, length: data.headline.length } });
+    data.headline = await getTextWithFallbacks(page, headlineSelectors, true, 'headline');
+    await logDebug({ message: 'Headline extraction complete', data: { found: !!data.headline, length: data.headline.length, preview: data.headline.substring(0, 100) } });
 
     // Location - try multiple selectors (more specific, avoid login prompts)
     const locationSelectors = [
@@ -538,14 +573,24 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
         'main section:has(h2:has-text("Experience"))',
       ];
       
-      const experienceSection = await findElementWithFallbacks(page, experienceSectionSelectors);
-      await logDebug({ message: 'Experience section', data: { found: !!experienceSection } });
+      const experienceSection = await findElementWithFallbacks(page, experienceSectionSelectors, 'experience-section');
+      await logDebug({ message: 'Experience section check', data: { found: !!experienceSection } });
       if (experienceSection) {
         // Wait a bit for content to load
         await page.waitForTimeout(1000);
         
         const experienceItems = await experienceSection.$$('.pvs-list__paged-list-item, .pvs-list li, ul.pvs-list > li, .pvs-list__outer-container > li');
         await logDebug({ message: 'Experience items found', data: { count: experienceItems.length } });
+        
+        if (experienceItems.length === 0) {
+          // Try to get some HTML structure for debugging
+          try {
+            const sectionHTML = await experienceSection.innerHTML().catch(() => '');
+            await logDebug({ message: 'Experience section HTML structure', data: { htmlPreview: sectionHTML.substring(0, 500) } });
+          } catch (e) {
+            await logDebug({ message: 'Could not get experience section HTML', data: { error: e instanceof Error ? e.message : String(e) } });
+          }
+        }
         
         for (const item of experienceItems) {
           try {
@@ -699,10 +744,11 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
         'main section:has(h2:has-text("Skills"))',
       ];
       
-      const skillsSection = await findElementWithFallbacks(page, skillsSectionSelectors);
+      const skillsSection = await findElementWithFallbacks(page, skillsSectionSelectors, 'skills-section');
+      await logDebug({ message: 'Skills section check', data: { found: !!skillsSection } });
       if (skillsSection) {
         // Wait a bit for content to load
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(1000);
         
         // Try to expand "Show more" for skills
         try {
@@ -773,18 +819,41 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       await logDebug({ message: 'Error extracting profile image', data: { error: e instanceof Error ? e.message : String(e) } });
     }
     
+    // Final summary with detailed results
     await logDebug({ 
       message: 'LinkedIn extraction complete', 
       data: { 
-        name: data.name ? 'found' : 'empty',
-        headline: data.headline ? 'found' : 'empty',
-        location: data.location ? 'found' : 'empty',
-        about: data.about ? 'found' : 'empty',
+        url,
+        name: { found: !!data.name, length: data.name.length, value: data.name.substring(0, 50) },
+        headline: { found: !!data.headline, length: data.headline.length, value: data.headline.substring(0, 50) },
+        location: { found: !!data.location, length: data.location.length, value: data.location.substring(0, 50) },
+        about: { found: !!data.about, length: data.about.length, preview: data.about.substring(0, 100) },
         experienceCount: data.experience.length,
         educationCount: data.education.length,
         skillsCount: data.skills.length,
+        profileImage: !!data.profileImage,
       } 
     });
+    
+    // If everything is empty, log page structure for debugging
+    if (!data.name && !data.headline && !data.location && data.experience.length === 0) {
+      try {
+        const pageHTML = await page.content().catch(() => '');
+        const mainHTML = await page.$eval('main', (el: any) => el.innerHTML).catch(() => '');
+        await logDebug({ 
+          message: 'All fields empty - capturing page structure', 
+          data: { 
+            url,
+            pageTitle: await page.title().catch(() => ''),
+            pageURL: page.url(),
+            mainHTMLPreview: mainHTML.substring(0, 1000),
+            pageHTMLPreview: pageHTML.substring(0, 1000)
+          } 
+        });
+      } catch (e) {
+        await logDebug({ message: 'Error capturing page structure', data: { error: e instanceof Error ? e.message : String(e) } });
+      }
+    }
   } catch (e) {
     console.error('Error extracting LinkedIn data:', e);
     await logDebug({ message: 'Error in extractLinkedInProfile', data: { error: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined } });
