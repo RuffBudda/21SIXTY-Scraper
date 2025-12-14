@@ -7,15 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "npx playwright install chromium || echo 'Note: Playwright browsers installation skipped. Run: npx playwright install chromium'",
-    "install-browsers": "npx playwright install chromium"
+    "postinstall": "npx playwright install webkit || echo 'Note: Playwright browsers installation skipped. Run: npx playwright install webkit'",
+    "install-browsers": "npx playwright install webkit"
   },
   "dependencies": {
     "next": "^14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "playwright-core": "^1.57.0",
-    "@sparticuz/chromium": "^143.0.0"
+    "playwright-core": "^1.57.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

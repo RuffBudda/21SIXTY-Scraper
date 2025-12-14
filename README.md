@@ -227,7 +227,7 @@ Content-Type: application/json
 ## 🛠️ Technical Stack
 
 - **Framework**: Next.js 14+ with App Router
-- **Scraping Engine**: Playwright with @sparticuz/chromium for serverless environments
+- **Scraping Engine**: Playwright with WebKit for fast, lightweight scraping optimized for Vercel free plan
 - **Styling**: Tailwind CSS for modern, responsive design
 - **Language**: TypeScript for type safety
 - **Deployment**: Optimized for Vercel serverless functions

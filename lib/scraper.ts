@@ -1,5 +1,4 @@
-import chromium from '@sparticuz/chromium';
-import { chromium as playwrightChromium } from 'playwright-core';
+import { webkit } from 'playwright-core';
 import { promises as fs, existsSync } from 'fs';
 import { join } from 'path';
 import { 
@@ -1878,40 +1877,18 @@ export async function scrapeProfileProgressive(
     const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
     const isServerless = hasAwsLambda || hasVercel || hasLambdaRoot || (!isDev && process.platform === 'linux');
 
+    // Use WebKit for serverless - much lighter and faster than Chromium
+    // WebKit starts ~2-3x faster and uses less memory, perfect for Vercel free plan
     let launchOptions: any;
 
     if (isServerless) {
-      // Configure Chromium for serverless environment
-      chromium.setGraphicsMode = false;
-      
-      // Get executable path - this will extract the bundled Chromium if needed
-      const execPath = await chromium.executablePath();
-      const chromiumArgs = chromium.args || [];
-      // In serverless, always use headless mode
-      const headlessMode = true;
-
-      // Note: existsSync check removed - it can fail in serverless environments
-      // even when the bundled Chromium from @sparticuz/chromium is valid.
-      // The bundled Chromium includes all necessary libraries and should work without this check.
-      
-      if (!execPath) {
-        throw new Error('Failed to get Chromium executable path from @sparticuz/chromium');
-      }
-
-      // Ensure we have the necessary args for serverless
-      const serverlessArgs = [
-        ...chromiumArgs,
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--single-process',
-        '--disable-gpu',
-      ];
-
       launchOptions = {
-        args: serverlessArgs,
-        executablePath: execPath,
-        headless: headlessMode,
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+        ],
       };
     } else {
       launchOptions = {
@@ -1920,19 +1897,15 @@ export async function scrapeProfileProgressive(
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu'
         ],
       };
     }
 
-    browser = await playwrightChromium.launch(launchOptions);
+    browser = await webkit.launch(launchOptions);
     // In Playwright 1.57.0+, setUserAgent is not available on Page object
     // Instead, create a context with userAgent and create pages from that context
     context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15'
     });
     const page = await context.newPage();
 
