@@ -470,52 +470,180 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
   };
 
   try {
-    // Wait for page to be ready
-    await page.waitForLoadState('networkidle', { timeout: 8000 });
-    await page.waitForTimeout(2000); // Give page time to render
+    // Fast loading strategy: use domcontentloaded and minimal waits
+    await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
+    await page.waitForTimeout(500); // Minimal wait for initial render
     
-    // Check page URL to see if we're on the right page
-    const currentUrl = page.url();
-    await logDebug({ message: 'Current page URL', data: { url: currentUrl } });
-    
-    // Check for login wall after page loads (but be less aggressive)
-    // Only check login wall if we can't find basic elements after waiting
-    try {
-      const testElement = await page.$('main h1, h1, main').catch(() => null);
-      if (!testElement) {
-        const isLoginWall = await checkLinkedInLoginWall(page);
-        if (isLoginWall) {
-          await logDebug({ message: 'LinkedIn login wall detected, returning empty data', data: { url, currentUrl } });
-          return data;
+    // Use a single evaluate() call to extract all data at once - MUCH faster
+    const extractedData = await page.evaluate(() => {
+      const result: any = {
+        name: '',
+        headline: '',
+        location: '',
+        about: '',
+        experience: [],
+        education: [],
+        skills: [],
+        languages: [],
+        profileImage: '',
+      };
+
+      // Name - try multiple selectors
+      const nameSelectors = [
+        'main h1.text-heading-xlarge',
+        'h1.text-heading-xlarge',
+        'main h1',
+        'h1[data-generated-suggestion-target]',
+        'h1.top-card-layout__title',
+        'h1.break-words',
+        'h1',
+      ];
+      for (const selector of nameSelectors) {
+        const el = document.querySelector(selector);
+        if (el) {
+          const text = el.textContent?.trim() || '';
+          if (text && text.length > 2 && text.length < 100) {
+            result.name = text;
+            break;
+          }
         }
       }
-    } catch (e) {
-      // Continue even if check fails
-    }
-    
-    // Wait for main content to load - try multiple strategies
-    try {
-      await page.waitForSelector('main', { timeout: 5000 });
-      await page.waitForTimeout(1000); // Additional wait for content
-    } catch (e) {
-      await logDebug({ message: 'Main content not found, trying body instead', data: { url, error: e instanceof Error ? e.message : String(e) } });
-      // Try waiting for body if main doesn't exist
-      try {
-        await page.waitForSelector('body', { timeout: 3000 });
-      } catch (e2) {
-        await logDebug({ message: 'Body not found either', data: { url } });
+
+      // Headline
+      const headlineSelectors = [
+        'main h1 + .text-body-medium.break-words',
+        'main .top-card-layout__headline',
+        '.text-body-medium.break-words',
+        'main h1 ~ .text-body-medium',
+        '.text-body-medium',
+      ];
+      for (const selector of headlineSelectors) {
+        const el = document.querySelector(selector);
+        if (el) {
+          const text = el.textContent?.trim() || '';
+          if (text && text.length > 5) {
+            result.headline = text;
+            break;
+          }
+        }
+      }
+
+      // Location
+      const locationSelectors = [
+        'main .text-body-small.inline.t-black--light.break-words',
+        'main .top-card-layout__first-subline',
+        '.text-body-small.t-black--light',
+      ];
+      for (const selector of locationSelectors) {
+        const el = document.querySelector(selector);
+        if (el) {
+          let text = el.textContent?.trim() || '';
+          // Remove "Contact Info" suffix if present
+          const contactInfoIndex = text.indexOf('Contact Info');
+          if (contactInfoIndex > -1) {
+            text = text.substring(0, contactInfoIndex).trim();
+          }
+          if (text && text.length > 2 && text.length < 200 && !text.toLowerCase().includes('sign in')) {
+            result.location = text;
+            break;
+          }
+        }
+      }
+
+      // About section
+      const aboutSection = document.querySelector('section#about, [data-section="summary"]');
+      if (aboutSection) {
+        const aboutText = aboutSection.querySelector('.inline-show-more-text, .break-words, span[aria-hidden="true"]');
+        if (aboutText) {
+          result.about = aboutText.textContent?.trim() || '';
+        }
+      }
+
+      // Experience
+      const expSection = document.querySelector('section#experience, [data-section="experience"]');
+      if (expSection) {
+        const expItems = expSection.querySelectorAll('.pvs-list__paged-list-item, .pvs-list li');
+        expItems.forEach((item: any) => {
+          const titleEl = item.querySelector('.mr1.t-bold span[aria-hidden="true"], h3 span[aria-hidden="true"], h3');
+          const companyEl = item.querySelector('.t-14.t-normal span[aria-hidden="true"], .text-body-small');
+          const dateEl = item.querySelector('.t-14.t-normal.t-black--light span[aria-hidden="true"]');
+          const descEl = item.querySelector('.pvs-list__outer-container span[aria-hidden="true"]');
+          
+          if (titleEl) {
+            result.experience.push({
+              title: titleEl.textContent?.trim() || '',
+              company: companyEl?.textContent?.trim() || '',
+              startDate: dateEl?.textContent?.trim() || '',
+              description: descEl?.textContent?.trim() || '',
+            });
+          }
+        });
+      }
+
+      // Education
+      const eduSection = document.querySelector('section#education, [data-section="education"]');
+      if (eduSection) {
+        const eduItems = eduSection.querySelectorAll('.pvs-list__paged-list-item, .pvs-list li');
+        eduItems.forEach((item: any) => {
+          const schoolEl = item.querySelector('.mr1.t-bold span[aria-hidden="true"], h3');
+          const degreeEl = item.querySelector('.t-14.t-normal span[aria-hidden="true"]');
+          const dateEl = item.querySelector('.t-14.t-normal.t-black--light span[aria-hidden="true"]');
+          
+          if (schoolEl) {
+            result.education.push({
+              school: schoolEl.textContent?.trim() || '',
+              degree: degreeEl?.textContent?.trim() || '',
+              startDate: dateEl?.textContent?.trim() || '',
+            });
+          }
+        });
+      }
+
+      // Skills
+      const skillsSection = document.querySelector('section#skills, [data-section="skills"]');
+      if (skillsSection) {
+        const skillItems = skillsSection.querySelectorAll('.pvs-list__paged-list-item, .pvs-list li');
+        skillItems.forEach((item: any) => {
+          const skillEl = item.querySelector('.mr1.t-bold span[aria-hidden="true"], span');
+          if (skillEl) {
+            const skill = skillEl.textContent?.trim() || '';
+            if (skill) result.skills.push(skill);
+          }
+        });
+      }
+
+      // Profile Image
+      const imgEl = document.querySelector('main img[alt*="profile"], .pv-top-card-profile-picture img, img.profile-photo-edit__preview');
+      if (imgEl) {
+        result.profileImage = (imgEl as HTMLImageElement).src || '';
+      }
+
+      return result;
+    });
+
+    // Populate data from extracted results
+    data.name = extractedData.name || '';
+    data.headline = extractedData.headline || '';
+    data.location = extractedData.location || '';
+    data.about = extractedData.about || '';
+    data.experience = extractedData.experience || [];
+    data.education = extractedData.education || [];
+    data.skills = extractedData.skills || [];
+    data.profileImage = extractedData.profileImage || '';
+
+    // If name is still empty, try page title
+    if (!data.name) {
+      const pageTitle = await page.title().catch(() => '');
+      if (pageTitle) {
+        const titleParts = pageTitle.split('|');
+        if (titleParts.length > 0) {
+          const potentialName = titleParts[0].trim();
+          if (potentialName && potentialName.length > 2 && potentialName.length < 100) {
+            data.name = potentialName;
+          }
+        }
       }
     }
-    
-    // Get page title for debugging
-    const pageTitle = await page.title().catch(() => '');
-    await logDebug({ message: 'Page title', data: { title: pageTitle } });
-    
-    // Get some basic page info for debugging
-    try {
-      const bodyText = await page.evaluate(() => document.body.textContent?.substring(0, 200) || '').catch(() => '');
-      await logDebug({ message: 'Page body preview', data: { preview: bodyText } });
-    } catch (e) {}
 
     // Name - try multiple selectors, including more generic ones
     const nameSelectors = [
@@ -1348,11 +1476,15 @@ async function extractLinkedInProfileProgressive(
     // Extract location if not already scraped
     if (!continuation.scrapedSections.includes('location')) {
       const locationSelectors = [
-        'main .text-body-small.inline.t-black--light.break-words:not([aria-label*="Sign"])',
+        'main .text-body-small.inline.t-black--light.break-words',
         'main .top-card-layout__first-subline',
-        'main section:first-of-type .text-body-small:not([aria-label*="Sign"]):not(:has-text("Sign in"))',
+        'main section:first-of-type .text-body-small',
         'main span[aria-label*="location"]',
         '.pv-text-details__left-panel .text-body-small:first-of-type',
+        'main .text-body-small.t-black--light',
+        '.ph5 .text-body-small.t-black--light',
+        '[data-test-id="profile-location"]',
+        'main section .text-body-small:first-of-type',
       ];
       let locationText = await getTextWithFallbacks(page, locationSelectors);
       // Additional cleaning for location
