@@ -644,8 +644,6 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
         }
       }
     }
-
-    // Name - try multiple selectors, including more generic ones
     const nameSelectors = [
       'main h1.text-heading-xlarge',
       'h1.text-heading-xlarge',
