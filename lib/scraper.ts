@@ -1373,46 +1373,166 @@ async function extractLinkedInProfileProgressive(
   };
 
   try {
-    // Wait for page to be ready
-    await page.waitForLoadState('networkidle', { timeout: 8000 });
-    await page.waitForTimeout(2000); // Give page time to render
+    // Fast loading strategy: use domcontentloaded and minimal waits
+    await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
+    await page.waitForTimeout(500); // Minimal wait for initial render
     
-    // Check page URL to see if we're on the right page
-    const currentUrl = page.url();
-    await logDebug({ message: 'Current page URL in progressive extraction', data: { url: currentUrl } });
-    
-    // Check for login wall after page loads (but be less aggressive)
-    // Only check login wall if we can't find basic elements after waiting
-    try {
-      const testElement = await page.$('main h1, h1, main').catch(() => null);
-      if (!testElement) {
-        const isLoginWall = await checkLinkedInLoginWall(page);
-        if (isLoginWall) {
-          await logDebug({ message: 'LinkedIn login wall detected in progressive extraction', data: { url, currentUrl } });
-          return data;
+    // Use a single evaluate() call to extract all data at once - MUCH faster
+    const extractedData = await page.evaluate(() => {
+      const result: any = {
+        name: '',
+        headline: '',
+        location: '',
+        about: '',
+        experience: [],
+        education: [],
+        skills: [],
+        languages: [],
+        profileImage: '',
+      };
+
+      // Name
+      const nameSelectors = ['main h1.text-heading-xlarge', 'h1.text-heading-xlarge', 'main h1', 'h1'];
+      for (const selector of nameSelectors) {
+        const el = document.querySelector(selector);
+        if (el) {
+          const text = el.textContent?.trim() || '';
+          if (text && text.length > 2 && text.length < 100) {
+            result.name = text;
+            break;
+          }
         }
       }
-    } catch (e) {
-      // Continue even if check fails
+
+      // Headline
+      const headlineSelectors = ['main h1 + .text-body-medium.break-words', 'main .top-card-layout__headline', '.text-body-medium.break-words'];
+      for (const selector of headlineSelectors) {
+        const el = document.querySelector(selector);
+        if (el) {
+          const text = el.textContent?.trim() || '';
+          if (text && text.length > 5) {
+            result.headline = text;
+            break;
+          }
+        }
+      }
+
+      // Location
+      const locationSelectors = ['main .text-body-small.inline.t-black--light.break-words', 'main .top-card-layout__first-subline'];
+      for (const selector of locationSelectors) {
+        const el = document.querySelector(selector);
+        if (el) {
+          let text = el.textContent?.trim() || '';
+          const contactInfoIndex = text.indexOf('Contact Info');
+          if (contactInfoIndex > -1) text = text.substring(0, contactInfoIndex).trim();
+          if (text && text.length > 2 && text.length < 200 && !text.toLowerCase().includes('sign in')) {
+            result.location = text;
+            break;
+          }
+        }
+      }
+
+      // About
+      const aboutSection = document.querySelector('section#about, [data-section="summary"]');
+      if (aboutSection) {
+        const aboutText = aboutSection.querySelector('.inline-show-more-text, .break-words');
+        if (aboutText) result.about = aboutText.textContent?.trim() || '';
+      }
+
+      // Experience
+      const expSection = document.querySelector('section#experience, [data-section="experience"]');
+      if (expSection) {
+        const expItems = expSection.querySelectorAll('.pvs-list__paged-list-item, .pvs-list li');
+        expItems.forEach((item: any) => {
+          const titleEl = item.querySelector('.mr1.t-bold span[aria-hidden="true"], h3');
+          const companyEl = item.querySelector('.t-14.t-normal span[aria-hidden="true"]');
+          const dateEl = item.querySelector('.t-14.t-normal.t-black--light span[aria-hidden="true"]');
+          if (titleEl) {
+            result.experience.push({
+              title: titleEl.textContent?.trim() || '',
+              company: companyEl?.textContent?.trim() || '',
+              startDate: dateEl?.textContent?.trim() || '',
+            });
+          }
+        });
+      }
+
+      // Education
+      const eduSection = document.querySelector('section#education, [data-section="education"]');
+      if (eduSection) {
+        const eduItems = eduSection.querySelectorAll('.pvs-list__paged-list-item, .pvs-list li');
+        eduItems.forEach((item: any) => {
+          const schoolEl = item.querySelector('.mr1.t-bold span[aria-hidden="true"], h3');
+          const degreeEl = item.querySelector('.t-14.t-normal span[aria-hidden="true"]');
+          if (schoolEl) {
+            result.education.push({
+              school: schoolEl.textContent?.trim() || '',
+              degree: degreeEl?.textContent?.trim() || '',
+            });
+          }
+        });
+      }
+
+      // Skills
+      const skillsSection = document.querySelector('section#skills, [data-section="skills"]');
+      if (skillsSection) {
+        const skillItems = skillsSection.querySelectorAll('.pvs-list__paged-list-item, .pvs-list li');
+        skillItems.forEach((item: any) => {
+          const skillEl = item.querySelector('.mr1.t-bold span[aria-hidden="true"], span');
+          if (skillEl) {
+            const skill = skillEl.textContent?.trim() || '';
+            if (skill) result.skills.push(skill);
+          }
+        });
+      }
+
+      return result;
+    });
+
+    // Populate data from extracted results
+    if (!continuation.scrapedSections.includes('name') && extractedData.name) {
+      data.name = extractedData.name;
+      continuation.scrapedSections.push('name');
     }
-    
-    // Wait for main content to load - try multiple strategies
-    try {
-      await page.waitForSelector('main', { timeout: 5000 });
-      await page.waitForTimeout(1000); // Additional wait for content
-    } catch (e) {
-      await logDebug({ message: 'Main content not found in progressive extraction, trying body instead', data: { url, error: e instanceof Error ? e.message : String(e) } });
-      // Try waiting for body if main doesn't exist
-      try {
-        await page.waitForSelector('body', { timeout: 3000 });
-      } catch (e2) {
-        await logDebug({ message: 'Body not found either', data: { url } });
+    if (!continuation.scrapedSections.includes('headline') && extractedData.headline) {
+      data.headline = extractedData.headline;
+      continuation.scrapedSections.push('headline');
+    }
+    if (!continuation.scrapedSections.includes('location') && extractedData.location) {
+      data.location = extractedData.location;
+      continuation.scrapedSections.push('location');
+    }
+    if (!continuation.scrapedSections.includes('about') && extractedData.about) {
+      data.about = extractedData.about;
+      continuation.scrapedSections.push('about');
+    }
+    if (!continuation.scrapedSections.includes('experience')) {
+      data.experience = extractedData.experience || [];
+      if (data.experience.length > 0) continuation.scrapedSections.push('experience');
+    }
+    if (!continuation.scrapedSections.includes('education')) {
+      data.education = extractedData.education || [];
+      if (data.education.length > 0) continuation.scrapedSections.push('education');
+    }
+    if (!continuation.scrapedSections.includes('skills')) {
+      data.skills = extractedData.skills || [];
+      if (data.skills.length > 0) continuation.scrapedSections.push('skills');
+    }
+
+    // If name is still empty, try page title
+    if (!data.name) {
+      const pageTitle = await page.title().catch(() => '');
+      if (pageTitle) {
+        const titleParts = pageTitle.split('|');
+        if (titleParts.length > 0) {
+          const potentialName = titleParts[0].trim();
+          if (potentialName && potentialName.length > 2 && potentialName.length < 100) {
+            data.name = potentialName;
+            continuation.scrapedSections.push('name');
+          }
+        }
       }
     }
-    
-    // Get page title for debugging
-    const pageTitle = await page.title().catch(() => '');
-    await logDebug({ message: 'Page title in progressive extraction', data: { title: pageTitle } });
 
     // Extract name if not already scraped
     if (!continuation.scrapedSections.includes('name')) {
@@ -2213,8 +2333,8 @@ export async function scrapeProfileProgressive(
     const page = await context.newPage();
 
     // Navigate with longer timeout and wait for network idle
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 10000 });
-    await page.waitForTimeout(2000); // Give page time to fully render
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 5000 });
+    await page.waitForTimeout(500); // Minimal wait for initial render
 
     // PRIORITY: Extract first and last visible text immediately
     if (!firstVisibleText || !lastVisibleText) {
@@ -2251,13 +2371,7 @@ export async function scrapeProfileProgressive(
         if (!validateLinkedInUrl(url)) {
           throw new Error('Invalid LinkedIn profile URL');
         }
-        // Quick expansion with time limit
-        try {
-          await Promise.race([
-            expandCollapsedContent(page),
-            new Promise(resolve => setTimeout(resolve, Math.min(remainingTime - 2000, 2000)))
-          ]);
-        } catch (e) {}
+        // Skip expansion for speed - extract data directly
         profileData = await extractLinkedInProfileProgressive(page, url, continuationState);
         break;
 
@@ -2265,12 +2379,6 @@ export async function scrapeProfileProgressive(
         if (!validateInstagramUrl(url)) {
           throw new Error('Invalid Instagram profile URL');
         }
-        try {
-          await Promise.race([
-            expandCollapsedContent(page),
-            new Promise(resolve => setTimeout(resolve, Math.min(remainingTime - 2000, 2000)))
-          ]);
-        } catch (e) {}
         profileData = await extractInstagramProfileProgressive(page, url, continuationState);
         break;
 
