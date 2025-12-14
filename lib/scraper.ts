@@ -665,13 +665,16 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
     await logDebug({ message: 'Name extraction complete', data: { found: !!data.name, name: data.name.substring(0, 50), length: data.name.length } });
     
     // If name is still empty, try using page title as fallback
-    if (!data.name && pageTitle) {
-      const titleParts = pageTitle.split('|');
-      if (titleParts.length > 0) {
-        const potentialName = titleParts[0].trim();
-        if (potentialName && potentialName.length > 2 && potentialName.length < 100) {
-          data.name = potentialName;
-          await logDebug({ message: 'Using page title as name fallback', data: { name: data.name } });
+    if (!data.name) {
+      const pageTitle = await page.title().catch(() => '');
+      if (pageTitle) {
+        const titleParts = pageTitle.split('|');
+        if (titleParts.length > 0) {
+          const potentialName = titleParts[0].trim();
+          if (potentialName && potentialName.length > 2 && potentialName.length < 100) {
+            data.name = potentialName;
+            await logDebug({ message: 'Using page title as name fallback', data: { name: data.name } });
+          }
         }
       }
     }
@@ -2383,12 +2386,6 @@ export async function scrapeProfileProgressive(
         break;
 
       case 'website':
-        try {
-          await Promise.race([
-            expandCollapsedContent(page),
-            new Promise(resolve => setTimeout(resolve, Math.min(remainingTime - 2000, 2000)))
-          ]);
-        } catch (e) {}
         profileData = await extractWebsitePersonDataProgressive(page, url, continuationState);
         break;
 
