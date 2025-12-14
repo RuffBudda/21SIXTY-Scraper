@@ -473,27 +473,36 @@ async function extractWebsitePersonData(page: any, url: string): Promise<Website
       for (const element of jsonLdElements) {
         try {
           const jsonText = await element.textContent();
-          if (jsonText) {
-            const jsonData = JSON.parse(jsonText);
-            if (Array.isArray(jsonData)) {
-              data.structuredData = { items: jsonData };
-            } else {
-              data.structuredData = jsonData;
-            }
+          if (jsonText && jsonText.trim()) {
+            // Validate that the text looks like JSON before parsing
+            const trimmedText = jsonText.trim();
+            if (trimmedText.startsWith('{') || trimmedText.startsWith('[')) {
+              try {
+                const jsonData = JSON.parse(trimmedText);
+                if (Array.isArray(jsonData)) {
+                  data.structuredData = { items: jsonData };
+                } else {
+                  data.structuredData = jsonData;
+                }
 
-            // Extract person data from structured data
-            const personData = Array.isArray(jsonData) 
-              ? jsonData.find((item: any) => item['@type'] === 'Person')
-              : (jsonData['@type'] === 'Person' ? jsonData : null);
+                // Extract person data from structured data
+                const personData = Array.isArray(jsonData) 
+                  ? jsonData.find((item: any) => item['@type'] === 'Person')
+                  : (jsonData['@type'] === 'Person' ? jsonData : null);
 
-            if (personData) {
-              data.name = personData.name || data.name;
-              data.email = personData.email || data.email;
-              data.jobTitle = personData.jobTitle || data.jobTitle;
-              if (personData.address) {
-                data.location = typeof personData.address === 'string' 
-                  ? personData.address 
-                  : personData.address.addressLocality;
+                if (personData) {
+                  data.name = personData.name || data.name;
+                  data.email = personData.email || data.email;
+                  data.jobTitle = personData.jobTitle || data.jobTitle;
+                  if (personData.address) {
+                    data.location = typeof personData.address === 'string' 
+                      ? personData.address 
+                      : personData.address.addressLocality;
+                  }
+                }
+              } catch (parseError) {
+                // Skip invalid JSON - log but don't throw
+                console.error('Failed to parse JSON-LD:', parseError);
               }
             }
           }
@@ -953,26 +962,35 @@ async function extractWebsitePersonDataProgressive(
         for (const element of jsonLdElements) {
           try {
             const jsonText = await element.textContent();
-            if (jsonText) {
-              const jsonData = JSON.parse(jsonText);
-              if (Array.isArray(jsonData)) {
-                data.structuredData = { items: jsonData };
-              } else {
-                data.structuredData = jsonData;
-              }
+            if (jsonText && jsonText.trim()) {
+              // Validate that the text looks like JSON before parsing
+              const trimmedText = jsonText.trim();
+              if (trimmedText.startsWith('{') || trimmedText.startsWith('[')) {
+                try {
+                  const jsonData = JSON.parse(trimmedText);
+                  if (Array.isArray(jsonData)) {
+                    data.structuredData = { items: jsonData };
+                  } else {
+                    data.structuredData = jsonData;
+                  }
 
-              const personData = Array.isArray(jsonData) 
-                ? jsonData.find((item: any) => item['@type'] === 'Person')
-                : (jsonData['@type'] === 'Person' ? jsonData : null);
+                  const personData = Array.isArray(jsonData) 
+                    ? jsonData.find((item: any) => item['@type'] === 'Person')
+                    : (jsonData['@type'] === 'Person' ? jsonData : null);
 
-              if (personData) {
-                data.name = personData.name || data.name;
-                data.email = personData.email || data.email;
-                data.jobTitle = personData.jobTitle || data.jobTitle;
-                if (personData.address) {
-                  data.location = typeof personData.address === 'string' 
-                    ? personData.address 
-                    : personData.address.addressLocality;
+                  if (personData) {
+                    data.name = personData.name || data.name;
+                    data.email = personData.email || data.email;
+                    data.jobTitle = personData.jobTitle || data.jobTitle;
+                    if (personData.address) {
+                      data.location = typeof personData.address === 'string' 
+                        ? personData.address 
+                        : personData.address.addressLocality;
+                    }
+                  }
+                } catch (parseError) {
+                  // Skip invalid JSON - log but don't throw
+                  console.error('Failed to parse JSON-LD:', parseError);
                 }
               }
             }
