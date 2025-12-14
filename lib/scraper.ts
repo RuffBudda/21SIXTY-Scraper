@@ -192,11 +192,14 @@ async function findElementWithFallbacks(page: any, selectors: string[]): Promise
 /**
  * Helper function to get text content from element with fallbacks
  */
-async function getTextWithFallbacks(page: any, selectors: string[]): Promise<string> {
+async function getTextWithFallbacks(page: any, selectors: string[], cleanText: boolean = true): Promise<string> {
   const element = await findElementWithFallbacks(page, selectors);
   if (element) {
     try {
-      const text = (await element.textContent())?.trim() || '';
+      let text = (await element.textContent())?.trim() || '';
+      if (cleanText) {
+        text = cleanLinkedInText(text);
+      }
       return text;
     } catch (e) {
       return '';
@@ -275,30 +278,93 @@ async function expandCollapsedContent(page: any) {
 }
 
 /**
+ * Cleans text by removing login prompts, UI elements, and extra whitespace
+ */
+function cleanLinkedInText(text: string): string {
+  if (!text) return '';
+  
+  // Remove login-related phrases
+  const loginPhrases = [
+    'Sign in to view',
+    'Sign in',
+    'Join now',
+    'Welcome back',
+    'Email or phone',
+    'Password',
+    'Forgot password',
+    'New to LinkedIn',
+    'User Agreement',
+    'Privacy Policy',
+    'Cookie Policy',
+    'Contact Info',
+    'see more',
+    'Show more',
+  ];
+  
+  let cleaned = text;
+  
+  // Remove login phrases
+  for (const phrase of loginPhrases) {
+    const regex = new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    cleaned = cleaned.replace(regex, '');
+  }
+  
+  // Remove excessive whitespace and newlines
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  
+  // Remove text that's mostly login-related
+  const loginKeywords = ['sign in', 'join now', 'email', 'password', 'welcome back'];
+  const lowerText = cleaned.toLowerCase();
+  const loginKeywordCount = loginKeywords.filter(keyword => lowerText.includes(keyword)).length;
+  
+  // If more than 2 login keywords found, likely a login wall
+  if (loginKeywordCount > 2 && cleaned.length > 50) {
+    return '';
+  }
+  
+  return cleaned;
+}
+
+/**
  * Checks if LinkedIn is showing login wall or blocking access
  */
 async function checkLinkedInLoginWall(page: any): Promise<boolean> {
   try {
-    const pageText = await page.textContent('body').catch(() => '');
     const pageUrl = page.url();
     
-    // Check for login indicators
-    const loginIndicators = [
-      'Sign in',
-      'Join now',
-      'Welcome to your professional community',
-      'linkedin.com/login',
-      'authwall',
-    ];
-    
-    const hasLoginIndicator = loginIndicators.some(indicator => 
-      pageText.toLowerCase().includes(indicator.toLowerCase()) || 
-      pageUrl.toLowerCase().includes(indicator.toLowerCase())
-    );
-    
-    if (hasLoginIndicator && !pageUrl.includes('/in/')) {
-      await logDebug({ message: 'LinkedIn login wall detected', data: { url: pageUrl } });
+    // Check URL first
+    if (pageUrl.includes('linkedin.com/login') || pageUrl.includes('authwall')) {
+      await logDebug({ message: 'LinkedIn login wall detected via URL', data: { url: pageUrl } });
       return true;
+    }
+    
+    // Check for login form elements
+    const loginForm = await page.$('form[action*="login"], input[type="password"], button:has-text("Sign in")').catch(() => null);
+    if (loginForm) {
+      await logDebug({ message: 'LinkedIn login wall detected via form elements', data: { url: pageUrl } });
+      return true;
+    }
+    
+    // Check page title
+    const pageTitle = await page.title().catch(() => '');
+    if (pageTitle.toLowerCase().includes('sign in') || pageTitle.toLowerCase().includes('login')) {
+      await logDebug({ message: 'LinkedIn login wall detected via page title', data: { url: pageUrl, title: pageTitle } });
+      return true;
+    }
+    
+    // Check for specific login indicators in main content
+    const mainContent = await page.$('main').catch(() => null);
+    if (mainContent) {
+      const mainText = await mainContent.textContent().catch(() => '');
+      const loginIndicators = ['Sign in to view', 'Welcome back', 'Email or phone'];
+      const hasLoginIndicator = loginIndicators.some(indicator => 
+        mainText.toLowerCase().includes(indicator.toLowerCase())
+      );
+      
+      if (hasLoginIndicator) {
+        await logDebug({ message: 'LinkedIn login wall detected in main content', data: { url: pageUrl } });
+        return true;
+      }
     }
     
     return false;
@@ -326,16 +392,23 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
   };
 
   try {
-    // Check for login wall
+    // Wait for page to be ready
+    await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
+    await page.waitForTimeout(2000); // Give more time for dynamic content
+    
+    // Check for login wall after page loads
     const isLoginWall = await checkLinkedInLoginWall(page);
     if (isLoginWall) {
       await logDebug({ message: 'LinkedIn login wall detected, returning empty data', data: { url } });
       return data;
     }
-
-    // Wait for page to be ready
-    await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
-    await page.waitForTimeout(1000);
+    
+    // Wait for main content to load
+    try {
+      await page.waitForSelector('main', { timeout: 5000 });
+    } catch (e) {
+      await logDebug({ message: 'Main content not found, may be login wall', data: { url } });
+    }
 
     // Name - try multiple selectors
     const nameSelectors = [
@@ -350,29 +423,37 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
     ];
     data.name = await getTextWithFallbacks(page, nameSelectors);
 
-    // Headline - try multiple selectors
+    // Headline - try multiple selectors (more specific to avoid login prompts)
     const headlineSelectors = [
-      '.text-body-medium.break-words',
-      '.top-card-layout__headline',
-      'main section:first-of-type .text-body-medium',
-      'main section:first-of-type p',
+      'main h1 + .text-body-medium.break-words',
+      'main .top-card-layout__headline',
+      'main section:first-of-type .text-body-medium:not([aria-label*="Sign"])',
       '.pv-text-details__left-panel .text-body-medium',
-      '.text-body-medium',
-      'div[data-generated-suggestion-target] + div',
+      'main h1 ~ .text-body-medium',
     ];
     data.headline = await getTextWithFallbacks(page, headlineSelectors);
 
-    // Location - try multiple selectors
+    // Location - try multiple selectors (more specific, avoid login prompts)
     const locationSelectors = [
-      '.text-body-small.inline.t-black--light.break-words',
-      '.top-card-layout__first-subline',
-      'main section:first-of-type .text-body-small',
-      'main section:first-of-type span[aria-label*="location"]',
-      '.pv-text-details__left-panel .text-body-small',
-      'span.text-body-small',
-      '.text-body-small.inline',
+      'main .text-body-small.inline.t-black--light.break-words:not([aria-label*="Sign"])',
+      'main .top-card-layout__first-subline',
+      'main section:first-of-type .text-body-small:not([aria-label*="Sign"]):not(:has-text("Sign in"))',
+      'main span[aria-label*="location"]',
+      '.pv-text-details__left-panel .text-body-small:first-of-type',
     ];
-    data.location = await getTextWithFallbacks(page, locationSelectors);
+    let locationText = await getTextWithFallbacks(page, locationSelectors);
+    // Additional cleaning for location - remove everything after "Contact Info" or login prompts
+    if (locationText) {
+      const contactInfoIndex = locationText.indexOf('Contact Info');
+      if (contactInfoIndex > -1) {
+        locationText = locationText.substring(0, contactInfoIndex).trim();
+      }
+      // Remove if it contains login prompts
+      if (locationText.toLowerCase().includes('sign in') || locationText.length > 200) {
+        locationText = '';
+      }
+    }
+    data.location = locationText;
 
     // About section
     try {
@@ -409,8 +490,14 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
           try {
             const aboutText = await aboutSection.$(selector);
             if (aboutText) {
-              const text = (await aboutText.textContent())?.trim() || '';
-              if (text.length > 10) {
+              let text = (await aboutText.textContent())?.trim() || '';
+              text = cleanLinkedInText(text);
+              
+              // Skip if it looks like login content
+              if (text.length > 10 && 
+                  !text.toLowerCase().includes('sign in to view') &&
+                  !text.toLowerCase().includes('welcome back') &&
+                  !text.toLowerCase().includes('email or phone')) {
                 data.about = text;
                 break;
               }
@@ -424,18 +511,31 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       await logDebug({ message: 'Error extracting about section', data: { error: e instanceof Error ? e.message : String(e) } });
     }
 
-    // Experience
+    // Experience - scroll to section first, then extract
     try {
+      // Scroll to experience section
+      await page.evaluate(() => {
+        const experienceSection = document.querySelector('section#experience, [data-section="experience"]');
+        if (experienceSection) {
+          experienceSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+      await page.waitForTimeout(1000);
+      
       const experienceSectionSelectors = [
         'section#experience',
         '[data-section="experience"]',
         'section[data-section="experience"]',
         '#experience',
+        'main section:has(h2:has-text("Experience"))',
       ];
       
       const experienceSection = await findElementWithFallbacks(page, experienceSectionSelectors);
       if (experienceSection) {
-        const experienceItems = await experienceSection.$$('.pvs-list__paged-list-item, .pvs-list li, ul.pvs-list > li');
+        // Wait a bit for content to load
+        await page.waitForTimeout(500);
+        
+        const experienceItems = await experienceSection.$$('.pvs-list__paged-list-item, .pvs-list li, ul.pvs-list > li, .pvs-list__outer-container > li');
         
         for (const item of experienceItems) {
           try {
@@ -503,18 +603,31 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       await logDebug({ message: 'Error extracting experience', data: { error: e instanceof Error ? e.message : String(e) } });
     }
 
-    // Education
+    // Education - scroll to section first, then extract
     try {
+      // Scroll to education section
+      await page.evaluate(() => {
+        const educationSection = document.querySelector('section#education, [data-section="education"]');
+        if (educationSection) {
+          educationSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+      await page.waitForTimeout(1000);
+      
       const educationSectionSelectors = [
         'section#education',
         '[data-section="education"]',
         'section[data-section="education"]',
         '#education',
+        'main section:has(h2:has-text("Education"))',
       ];
       
       const educationSection = await findElementWithFallbacks(page, educationSectionSelectors);
       if (educationSection) {
-        const educationItems = await educationSection.$$('.pvs-list__paged-list-item, .pvs-list li, ul.pvs-list > li');
+        // Wait a bit for content to load
+        await page.waitForTimeout(500);
+        
+        const educationItems = await educationSection.$$('.pvs-list__paged-list-item, .pvs-list li, ul.pvs-list > li, .pvs-list__outer-container > li');
         
         for (const item of educationItems) {
           try {
@@ -557,24 +670,48 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       await logDebug({ message: 'Error extracting education', data: { error: e instanceof Error ? e.message : String(e) } });
     }
 
-    // Skills
+    // Skills - scroll to section first, then extract
     try {
+      // Scroll to skills section
+      await page.evaluate(() => {
+        const skillsSection = document.querySelector('section#skills, [data-section="skills"]');
+        if (skillsSection) {
+          skillsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+      await page.waitForTimeout(1000);
+      
       const skillsSectionSelectors = [
         'section#skills',
         '[data-section="skills"]',
         'section[data-section="skills"]',
         '#skills',
+        'main section:has(h2:has-text("Skills"))',
       ];
       
       const skillsSection = await findElementWithFallbacks(page, skillsSectionSelectors);
       if (skillsSection) {
+        // Wait a bit for content to load
+        await page.waitForTimeout(500);
+        
+        // Try to expand "Show more" for skills
+        try {
+          const showMoreBtn = await skillsSection.$('button:has-text("Show more"), button[aria-label*="Show more"]');
+          if (showMoreBtn) {
+            await showMoreBtn.click({ timeout: 1000 });
+            await page.waitForTimeout(500);
+          }
+        } catch (e) {
+          // Continue if button not found
+        }
+        
         const skillSelectors = [
-          '.mr1.t-bold span[aria-hidden="true"]',
-          'h3 span[aria-hidden="true"]',
-          'h3',
-          '.t-bold span',
-          'span[aria-hidden="true"]',
-          'li span',
+          '.pvs-list__paged-list-item .mr1.t-bold span[aria-hidden="true"]',
+          '.pvs-list li .mr1.t-bold span[aria-hidden="true"]',
+          '.pvs-list__paged-list-item h3 span[aria-hidden="true"]',
+          '.pvs-list li h3 span[aria-hidden="true"]',
+          '.pvs-list__paged-list-item .t-bold span',
+          '.pvs-list li .t-bold span',
         ];
         
         // Try multiple approaches
@@ -583,7 +720,13 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
             const skillElements = await skillsSection.$$(selector);
             for (const element of skillElements) {
               const skill = (await element.textContent())?.trim();
-              if (skill && skill.length > 1 && !data.skills.includes(skill)) {
+              // Filter out login prompts and ensure it's a valid skill
+              if (skill && 
+                  skill.length > 1 && 
+                  skill.length < 100 &&
+                  !skill.toLowerCase().includes('sign in') &&
+                  !skill.toLowerCase().includes('show more') &&
+                  !data.skills.includes(skill)) {
                 data.skills.push(skill);
               }
             }
@@ -596,20 +739,25 @@ async function extractLinkedInProfile(page: any, url: string): Promise<LinkedInP
       await logDebug({ message: 'Error extracting skills', data: { error: e instanceof Error ? e.message : String(e) } });
     }
 
-    // Profile image
+    // Profile image - be more specific to get actual profile image, not login page images
     try {
       const profileImgSelectors = [
-        '.pv-top-card-profile-picture__image',
-        'img.pv-top-card-profile-picture__image',
-        'img[alt*="profile"]',
+        'main .pv-top-card-profile-picture__image',
+        'main img.pv-top-card-profile-picture__image',
         'main img[alt*="profile picture"]',
-        'header img',
-        'img.profile-photo',
+        'main .top-card-layout__entity-image img',
       ];
       
       const profileImg = await findElementWithFallbacks(page, profileImgSelectors);
       if (profileImg) {
-        data.profileImage = await profileImg.getAttribute('src') || undefined;
+        const imgSrc = await profileImg.getAttribute('src') || '';
+        // Filter out placeholder/default images
+        if (imgSrc && 
+            !imgSrc.includes('static.licdn.com/aero-v1/sc/h/') && 
+            !imgSrc.includes('media.licdn.com/dms/image/') &&
+            imgSrc.length > 50) {
+          data.profileImage = imgSrc;
+        }
       }
     } catch (e) {
       await logDebug({ message: 'Error extracting profile image', data: { error: e instanceof Error ? e.message : String(e) } });
@@ -924,16 +1072,23 @@ async function extractLinkedInProfileProgressive(
   };
 
   try {
-    // Check for login wall
+    // Wait for page to be ready
+    await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
+    await page.waitForTimeout(2000); // Give more time for dynamic content
+    
+    // Check for login wall after page loads
     const isLoginWall = await checkLinkedInLoginWall(page);
     if (isLoginWall) {
       await logDebug({ message: 'LinkedIn login wall detected in progressive extraction', data: { url } });
       return data;
     }
-
-    // Wait for page to be ready
-    await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
-    await page.waitForTimeout(1000);
+    
+    // Wait for main content to load
+    try {
+      await page.waitForSelector('main', { timeout: 5000 });
+    } catch (e) {
+      await logDebug({ message: 'Main content not found in progressive extraction', data: { url } });
+    }
 
     // Extract name if not already scraped
     if (!continuation.scrapedSections.includes('name')) {
@@ -957,13 +1112,11 @@ async function extractLinkedInProfileProgressive(
     // Extract headline if not already scraped
     if (!continuation.scrapedSections.includes('headline')) {
       const headlineSelectors = [
-        '.text-body-medium.break-words',
-        '.top-card-layout__headline',
-        'main section:first-of-type .text-body-medium',
-        'main section:first-of-type p',
+        'main h1 + .text-body-medium.break-words',
+        'main .top-card-layout__headline',
+        'main section:first-of-type .text-body-medium:not([aria-label*="Sign"])',
         '.pv-text-details__left-panel .text-body-medium',
-        '.text-body-medium',
-        'div[data-generated-suggestion-target] + div',
+        'main h1 ~ .text-body-medium',
       ];
       const headline = await getTextWithFallbacks(page, headlineSelectors);
       if (headline) {
@@ -975,17 +1128,25 @@ async function extractLinkedInProfileProgressive(
     // Extract location if not already scraped
     if (!continuation.scrapedSections.includes('location')) {
       const locationSelectors = [
-        '.text-body-small.inline.t-black--light.break-words',
-        '.top-card-layout__first-subline',
-        'main section:first-of-type .text-body-small',
-        'main section:first-of-type span[aria-label*="location"]',
-        '.pv-text-details__left-panel .text-body-small',
-        'span.text-body-small',
-        '.text-body-small.inline',
+        'main .text-body-small.inline.t-black--light.break-words:not([aria-label*="Sign"])',
+        'main .top-card-layout__first-subline',
+        'main section:first-of-type .text-body-small:not([aria-label*="Sign"]):not(:has-text("Sign in"))',
+        'main span[aria-label*="location"]',
+        '.pv-text-details__left-panel .text-body-small:first-of-type',
       ];
-      const location = await getTextWithFallbacks(page, locationSelectors);
-      if (location) {
-        data.location = location;
+      let locationText = await getTextWithFallbacks(page, locationSelectors);
+      // Additional cleaning for location
+      if (locationText) {
+        const contactInfoIndex = locationText.indexOf('Contact Info');
+        if (contactInfoIndex > -1) {
+          locationText = locationText.substring(0, contactInfoIndex).trim();
+        }
+        if (locationText.toLowerCase().includes('sign in') || locationText.length > 200) {
+          locationText = '';
+        }
+      }
+      if (locationText) {
+        data.location = locationText;
         continuation.scrapedSections.push('location');
       }
     }
