@@ -1886,7 +1886,7 @@ export async function scrapeProfileProgressive(
     if (isServerless) {
       try {
         // Configure Chromium for serverless environment (Vercel/Lambda)
-        chromium.setGraphicsMode(false);
+        chromium.setGraphicsMode = false;
         
         const execPath = await chromium.executablePath();
         const chromiumArgs = chromium.args || [];
