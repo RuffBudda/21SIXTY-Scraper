@@ -11,37 +11,69 @@ import { getLinkedInCookies } from './linkedinAuth';
  * Automatically retries with cookies if login wall is detected
  */
 export async function scrapeLinkedInProfileHTTP(url: string, useCookies: boolean = false): Promise<LinkedInProfileData> {
-  // Get cookies if available
+  // Get cookies if available - use them from the start if available
   const cookies = getLinkedInCookies();
-  const shouldUseCookies = useCookies && cookies.length > 0;
+  const shouldUseCookies = useCookies || cookies.length > 0;
   
   // 1. Fetch HTML with proper headers (and cookies if available)
+  // Use more realistic browser headers to avoid LinkedIn's bot detection (HTTP 999)
   const headers: Record<string, string> = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
     'Accept-Language': 'en-US,en;q=0.9',
     'Accept-Encoding': 'gzip, deflate, br',
     'Connection': 'keep-alive',
     'Upgrade-Insecure-Requests': '1',
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-Site': 'none',
     'Sec-Fetch-User': '?1',
-    'Referer': 'https://www.linkedin.com/',
+    'Referer': 'https://www.linkedin.com/feed/',
     'Cache-Control': 'max-age=0',
+    'DNT': '1',
+    'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
   };
   
-  // Add cookies if available
-  if (shouldUseCookies) {
+  // Add cookies if available - CRITICAL for avoiding HTTP 999
+  if (shouldUseCookies && cookies.length > 0) {
     headers['Cookie'] = cookies;
+    // Update referer when using cookies to make it look like internal navigation
+    headers['Referer'] = 'https://www.linkedin.com/feed/';
+    headers['Sec-Fetch-Site'] = 'same-origin';
   }
   
   const response = await fetch(url, {
     headers,
-    signal: AbortSignal.timeout(5000) // 5 second timeout
+    signal: AbortSignal.timeout(5000), // 5 second timeout
+    redirect: 'follow', // Follow redirects
   });
 
+  // Handle LinkedIn's custom HTTP 999 status (bot detection)
+  if (response.status === 999) {
+    // If we haven't tried with cookies yet and cookies are available, retry
+    if (!useCookies && cookies.length > 0) {
+      console.log('HTTP 999 detected (LinkedIn bot detection), retrying with cookies...');
+      return scrapeLinkedInProfileHTTP(url, true);
+    }
+    
+    throw new Error(
+      'LinkedIn blocked the request (HTTP 999 - bot detection). ' +
+      'Please set LINKEDIN_COOKIES environment variable with valid session cookies. ' +
+      'See LINKEDIN_AUTH_SETUP.md for instructions.'
+    );
+  }
+
   if (!response.ok) {
+    // Handle other HTTP errors
+    if (response.status === 403) {
+      throw new Error(
+        'LinkedIn blocked the request (403 Forbidden). ' +
+        'This usually means LinkedIn detected automated access. ' +
+        'Please set LINKEDIN_COOKIES environment variable with valid session cookies.'
+      );
+    }
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
@@ -65,7 +97,7 @@ export async function scrapeLinkedInProfileHTTP(url: string, useCookies: boolean
   );
 
   // If login wall detected and we haven't tried with cookies yet, retry with cookies
-  if (isLoginWall && !shouldUseCookies && cookies.length > 0) {
+  if (isLoginWall && !useCookies && cookies.length > 0) {
     console.log('Login wall detected, retrying with cookies...');
     return scrapeLinkedInProfileHTTP(url, true);
   }

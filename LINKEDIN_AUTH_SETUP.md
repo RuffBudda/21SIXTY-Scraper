@@ -70,9 +70,20 @@ LINKEDIN_ENCRYPTION_KEY=your-32-byte-key-here
 
 ## Troubleshooting
 
+### "HTTP error! status: 999" error
+- **Cause**: LinkedIn's bot detection system blocked the request
+- **Solution**: Set `LINKEDIN_COOKIES` environment variable with valid session cookies
+- **Important**: HTTP 999 is LinkedIn's custom status code for bot detection - cookies are REQUIRED
+- **Note**: Without cookies, LinkedIn will block automated requests
+
 ### "Login wall detected" error
 - **Solution**: Set `LINKEDIN_COOKIES` environment variable with valid cookies
 - **Check**: Cookies may have expired - get fresh ones
+
+### "HTTP error! status: 403" error
+- **Cause**: LinkedIn blocked the request (Forbidden)
+- **Solution**: Set `LINKEDIN_COOKIES` environment variable with valid session cookies
+- **Note**: This usually means LinkedIn detected automated access
 
 ### "Failed to decrypt credentials" error
 - **Solution**: Check that encryption key matches (default key is used if not set)
@@ -81,6 +92,7 @@ LINKEDIN_ENCRYPTION_KEY=your-32-byte-key-here
 - **Check**: Cookies may have expired
 - **Solution**: Get fresh cookies from browser
 - **Note**: LinkedIn may detect automated access - use cookies sparingly
+- **Important**: Cookies are essential to avoid HTTP 999 errors
 
 ## Code Usage
 
