@@ -94,6 +94,14 @@ The application is optimized for droplet deployment with:
 - Memory-efficient Playwright configuration
 - PM2 process management
 
+### 🔄 Updating Your Installation
+
+See [UPDATE_GUIDE.md](./UPDATE_GUIDE.md) for:
+- Manual update procedures
+- **Automatic deployment via GitHub webhooks** (recommended)
+- Troubleshooting update issues
+- Rollback procedures
+
 ## 📖 Usage Guide
 
 ### Direct Scraping (Web Interface)

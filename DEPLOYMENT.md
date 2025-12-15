@@ -67,18 +67,55 @@ chmod +x scripts/server-setup.sh
 cd /var/www/scraper
 npm install
 npx playwright install chromium
+
+# Install Playwright system dependencies (important!)
+chmod +x scripts/fix-playwright-deps.sh
+./scripts/fix-playwright-deps.sh
+
 npm run build
 ```
 
 ## Step 5: Configure Environment Variables
 
-Create `.env.local` file:
+Environment variables are secret settings that your application needs to run. Think of them like passwords that only your server knows.
 
-```bash
-nano /var/www/scraper/.env.local
-```
+### What you need to do:
 
-Add your environment variables (API_KEY, etc.)
+1. **Open the file editor** (nano is a simple text editor):
+   ```bash
+   nano /var/www/scraper/.env.local
+   ```
+   
+   This command opens a text editor. If the file doesn't exist, it will create a new one.
+
+2. **You'll see an empty screen** (or some text if the file already exists). This is normal!
+
+3. **Type or paste your environment variables**. For this scraper, you typically don't need any environment variables, but if you want to add one (like an API key), you would type:
+   ```
+   API_KEY=your-secret-key-here
+   ```
+   
+   **Important**: 
+   - No spaces around the `=` sign
+   - Replace `your-secret-key-here` with your actual key
+   - Each variable goes on its own line
+
+4. **Save and exit**:
+   - Press `Ctrl + X` (this means you want to exit)
+   - You'll be asked "Save modified buffer?" - type `Y` and press Enter
+   - You'll be asked for the filename - just press Enter (it will use the same filename)
+
+5. **Verify the file was created**:
+   ```bash
+   cat /var/www/scraper/.env.local
+   ```
+   
+   This will show you the contents of the file. You should see what you just typed.
+
+### Notes:
+- If you don't need any environment variables, you can skip this step or create an empty file
+- The `.env.local` file is already in `.gitignore`, so it won't be uploaded to GitHub (this is good for security!)
+- If you make a mistake, just run `nano /var/www/scraper/.env.local` again to edit it
 
 ## Step 6: Start Application with PM2
 
@@ -124,20 +161,40 @@ Follow the prompts. Certbot will automatically configure SSL.
 
 ## Updating the Application
 
-To update the application after making changes:
+See [UPDATE_GUIDE.md](./UPDATE_GUIDE.md) for detailed update instructions, including:
+- Manual update procedures
+- Automatic deployment via GitHub webhooks
+- Troubleshooting update issues
+- Rollback procedures
 
+Quick update:
 ```bash
 ssh root@[DROPLET_IP]
 cd /var/www/scraper
-git pull origin main
-npm install
-npm run build
-pm2 restart scraper
+./scripts/update.sh
 ```
 
 ## Troubleshooting
 
-- If Playwright fails: Check system dependencies are installed
+### Playwright Browser Launch Errors
+
+If you encounter errors like:
+- `libatk-1.0.so.0: cannot open shared object file`
+- `browserType.launch: Target page, context or browser has been closed`
+- Missing shared library errors
+
+**Quick Fix:**
+```bash
+cd /var/www/scraper
+chmod +x scripts/fix-playwright-deps.sh
+./scripts/fix-playwright-deps.sh
+pm2 restart scraper
+```
+
+This script will install all required system dependencies for Playwright/Chromium.
+
+### Other Issues
+
 - If memory issues: Monitor with `pm2 monit` and adjust browser pool settings
 - If SSL fails: Ensure DNS A record is propagated (check with `dig scrape.2160.media`)
 - If git clone fails: Ensure the repository is public or SSH keys are configured for GitHub
