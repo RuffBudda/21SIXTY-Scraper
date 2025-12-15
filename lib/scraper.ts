@@ -14,11 +14,11 @@ import {
 import { getContinuation, setContinuation, generateToken } from './continuationStore';
 import { getStaticLinkedInProfile } from './staticProfiles';
 import { getCachedProfile, setCachedProfile } from './profileCache';
-import { scrapeLinkedInProfileWithScrapfly } from './scrapfly';
 import { 
   scrapeInstagramProfileHTTP, 
   scrapeWebsitePersonHTTP 
 } from './httpScraper';
+import { getBrowserPool } from './browserPool';
 
 const LOG_PATH = join(process.cwd(), '.cursor', 'debug.log');
 
@@ -1820,8 +1820,62 @@ async function extractWebsitePersonDataProgressive(
 }
 
 /**
+ * Scrapes LinkedIn profile using Playwright browser
+ * Uses browser pool for efficient resource management
+ */
+async function scrapeLinkedInProfileWithPlaywright(url: string): Promise<LinkedInProfileData> {
+  const pool = getBrowserPool();
+  let instance = null;
+
+  try {
+    // Acquire browser instance from pool
+    instance = await pool.acquire();
+    const { page } = instance;
+
+    await logDebug({ message: 'Starting Playwright LinkedIn scrape', data: { url } });
+
+    // Navigate to LinkedIn profile
+    await page.goto(url, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
+
+    // Wait for page to load
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+    await page.waitForTimeout(1000); // Give time for dynamic content
+
+    // Check for login wall
+    const hasLoginWall = await checkLinkedInLoginWall(page);
+    if (hasLoginWall) {
+      throw new Error('LinkedIn login wall detected - profile requires authentication');
+    }
+
+    // Expand collapsed content
+    await expandCollapsedContent(page);
+
+    // Extract profile data using existing function
+    const profileData = await extractLinkedInProfile(page, url);
+
+    await logDebug({ message: 'Playwright LinkedIn scrape complete', data: { url, name: profileData.name } });
+
+    return profileData;
+  } catch (error: any) {
+    await logDebug({ 
+      message: 'Playwright LinkedIn scrape error', 
+      data: { url, error: error.message } 
+    });
+    throw error;
+  } finally {
+    // Release browser instance back to pool
+    if (instance) {
+      pool.release(instance);
+    }
+  }
+}
+
+/**
  * Progressive scraping function that supports continuation tokens
- * Uses HTTP-based scraping (fetch + Cheerio) - works on Vercel free plan
+ * Uses Playwright for LinkedIn, HTTP-based scraping for other platforms
  */
 export async function scrapeProfileProgressive(
   url: string,
@@ -1863,7 +1917,7 @@ export async function scrapeProfileProgressive(
   }
 
   const startTime = Date.now();
-  const MAX_EXECUTION_TIME = 8000; // 8 seconds max, 2s buffer for Vercel's 10s limit
+  const MAX_EXECUTION_TIME = 55000; // 55 seconds max for Playwright scraping on droplet
 
   // Initialize or load continuation state
   let continuationState: ScrapeContinuation = continuation || {
@@ -1888,7 +1942,7 @@ export async function scrapeProfileProgressive(
         if (!validateLinkedInUrl(url)) {
           throw new Error('Invalid LinkedIn profile URL');
         }
-        profileData = await scrapeLinkedInProfileWithScrapfly(url);
+        profileData = await scrapeLinkedInProfileWithPlaywright(url);
         // Extract first/last visible text from scraped data
         if (!firstVisibleText) {
           firstVisibleText = profileData.name || '';

@@ -1,6 +1,6 @@
 # 21SIXTY SCRAPER
 
-A powerful, open-source web scraper that extracts profile data from LinkedIn, Instagram, and general websites. Built with Next.js and Playwright, designed for easy deployment on Vercel with a modern web interface and RESTful API.
+A powerful, open-source web scraper that extracts profile data from LinkedIn, Instagram, and general websites. Built with Next.js and Playwright, optimized for deployment on DigitalOcean droplets with a modern web interface and RESTful API.
 
 ## ✨ Features
 
@@ -10,8 +10,8 @@ A powerful, open-source web scraper that extracts profile data from LinkedIn, In
 - **Webhook API**: Integrate with automation tools like N8N, Zapier, or custom applications
 - **Modern UI**: Clean, responsive interface built with Tailwind CSS
 - **No Authentication Required**: Works with public profiles only - no login needed
-- **Serverless Ready**: Optimized for Vercel deployment with automatic scaling
-- **Rate Limiting**: Built-in protection against abuse with configurable rate limits
+- **Request Queue**: Intelligent queuing system handles concurrent requests efficiently
+- **Optimized for Droplets**: Designed for DigitalOcean droplet deployment with resource-efficient browser pooling
 
 ## 🚀 Quick Start
 
@@ -19,8 +19,8 @@ A powerful, open-source web scraper that extracts profile data from LinkedIn, In
 
 Before you begin, ensure you have:
 - **Node.js 18+** installed ([Download here](https://nodejs.org/))
-- A **Vercel account** (free tier is sufficient) for deployment
 - **Git** installed for cloning the repository
+- For production: A **DigitalOcean droplet** or similar VPS (see [DEPLOYMENT.md](./DEPLOYMENT.md))
 
 ### Installation Steps
 
@@ -43,7 +43,7 @@ Before you begin, ensure you have:
    ```bash
    npx playwright install chromium
    ```
-   > **Note**: For Vercel deployment, `@sparticuz/chromium` is automatically used which includes pre-bundled Chromium optimized for serverless environments.
+   > **Note**: Playwright will install Chromium browser automatically during postinstall.
 
 4. **Set up environment variables**
    
@@ -76,29 +76,23 @@ sudo apt-get install -y libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxcom
 npx playwright install-deps chromium
 ```
 
-## 📦 Deployment to Vercel
+## 📦 Deployment
 
-Deploying to Vercel is straightforward and free:
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions to DigitalOcean droplets.
 
-1. **Push your code to GitHub**
-   - Create a new repository on GitHub
-   - Push your code: `git push origin main`
+Quick deployment steps:
+1. Create a DigitalOcean droplet (Ubuntu 22.04, $6/month plan recommended)
+2. Run the server setup script
+3. Upload application files
+4. Install dependencies and build
+5. Configure Nginx and SSL
+6. Start with PM2
 
-2. **Import project in Vercel**
-   - Go to [vercel.com](https://vercel.com)
-   - Click "New Project"
-   - Import your GitHub repository
-   - Vercel will auto-detect Next.js settings
-
-3. **Configure environment variables**
-   - In Vercel project settings, add your `API_KEY` environment variable
-   - Redeploy to apply changes
-
-4. **Deploy!**
-   - Vercel will automatically deploy on every push to main
-   - Your app will be live at `your-project.vercel.app`
-
-> **Note**: The function timeout is set to 60 seconds, which works perfectly on Vercel's free tier. For longer scraping operations, consider upgrading to a paid plan.
+The application is optimized for droplet deployment with:
+- Browser pool management (max 2 concurrent browsers)
+- Request queuing system
+- Memory-efficient Playwright configuration
+- PM2 process management
 
 ## 📖 Usage Guide
 

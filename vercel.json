@@ -1,9 +1,0 @@
-{
-  "functions": {
-    "app/api/scrape/route.ts": {
-      "maxDuration": 10
-    }
-  },
-  "regions": ["iad1"]
-}
-
