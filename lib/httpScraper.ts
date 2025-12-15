@@ -4,21 +4,40 @@
  */
 import * as cheerio from 'cheerio';
 import { LinkedInProfileData, InstagramProfileData, WebsitePersonData, ProfileData } from './types';
+import { getLinkedInCookies } from './linkedinAuth';
 
 /**
  * Scrapes LinkedIn profile using HTTP + Cheerio (no browser)
+ * Automatically retries with cookies if login wall is detected
  */
-export async function scrapeLinkedInProfileHTTP(url: string): Promise<LinkedInProfileData> {
-  // 1. Fetch HTML with proper headers
+export async function scrapeLinkedInProfileHTTP(url: string, useCookies: boolean = false): Promise<LinkedInProfileData> {
+  // Get cookies if available
+  const cookies = getLinkedInCookies();
+  const shouldUseCookies = useCookies && cookies.length > 0;
+  
+  // 1. Fetch HTML with proper headers (and cookies if available)
+  const headers: Record<string, string> = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-User': '?1',
+    'Referer': 'https://www.linkedin.com/',
+    'Cache-Control': 'max-age=0',
+  };
+  
+  // Add cookies if available
+  if (shouldUseCookies) {
+    headers['Cookie'] = cookies;
+  }
+  
   const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Connection': 'keep-alive',
-      'Upgrade-Insecure-Requests': '1',
-    },
+    headers,
     signal: AbortSignal.timeout(5000) // 5 second timeout
   });
 
@@ -32,14 +51,51 @@ export async function scrapeLinkedInProfileHTTP(url: string): Promise<LinkedInPr
   const $ = cheerio.load(html);
 
   // 3. Check for login walls
-  const isLoginWall = $('form[action*="login"]').length > 0 ||
-                      $('input[type="password"]').length > 0 ||
-                      url.includes('linkedin.com/login') ||
-                      url.includes('authwall') ||
-                      $('body').text().toLowerCase().includes('sign in');
+  const bodyText = $('body').text().toLowerCase();
+  const isLoginWall = (
+    $('form[action*="login"]').length > 0 &&
+    $('input[type="password"]').length > 0
+  ) ||
+  url.includes('linkedin.com/login') ||
+  url.includes('authwall') ||
+  (
+    bodyText.includes('sign in') &&
+    bodyText.includes('email') &&
+    bodyText.includes('password')
+  );
 
+  // If login wall detected and we haven't tried with cookies yet, retry with cookies
+  if (isLoginWall && !shouldUseCookies && cookies.length > 0) {
+    console.log('Login wall detected, retrying with cookies...');
+    return scrapeLinkedInProfileHTTP(url, true);
+  }
+
+  // If still login wall after using cookies, try to extract partial data from meta tags
   if (isLoginWall) {
-    throw new Error('LinkedIn login wall detected - profile requires authentication');
+    const ogTitle = $('meta[property="og:title"]').attr('content') || '';
+    const ogDescription = $('meta[property="og:description"]').attr('content') || '';
+    const pageTitle = $('title').text() || '';
+    
+    // If we have some data from meta tags, return partial data instead of throwing
+    if (ogTitle || ogDescription || pageTitle) {
+      const partialName = ogTitle.split('|')[0].trim() || pageTitle.split('|')[0].trim() || '';
+      
+      return {
+        platform: 'linkedin',
+        url,
+        name: partialName,
+        headline: ogDescription || '',
+        location: '',
+        about: '',
+        experience: [],
+        education: [],
+        skills: [],
+        languages: [],
+        recommendations: [],
+      };
+    }
+    
+    throw new Error('LinkedIn login wall detected - profile requires authentication. Please set LINKEDIN_COOKIES environment variable with valid session cookies.');
   }
 
   // 4. Extract data using multiple strategies
