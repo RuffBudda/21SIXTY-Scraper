@@ -79,6 +79,80 @@ After updating:
 
 ## Troubleshooting Updates
 
+### Issue: Git pull fails with "Your local changes would be overwritten"
+
+**Error message:**
+```
+error: Your local changes to the following files would be overwritten by merge:
+	scripts/server-setup.sh
+Please commit your changes or stash them before you merge.
+Aborting
+```
+
+**Solution 1: Use the update script (Recommended)**
+
+The update script automatically handles local changes:
+
+```bash
+cd /var/www/scraper
+chmod +x scripts/update.sh
+./scripts/update.sh
+```
+
+**Solution 2: Stash local changes manually**
+
+If you prefer to handle it manually:
+
+```bash
+cd /var/www/scraper
+
+# Stash your local changes
+git stash
+
+# Pull the latest changes
+git pull origin main
+
+# Apply your stashed changes back (if needed)
+git stash pop
+
+# If there are conflicts, resolve them manually
+# Then commit if you want to keep the merged changes
+```
+
+**Solution 3: Discard local changes**
+
+If your local changes are not important and you want to match GitHub exactly:
+
+```bash
+cd /var/www/scraper
+
+# Discard all local changes
+git reset --hard HEAD
+
+# Pull the latest changes
+git pull origin main
+```
+
+**Solution 4: Commit local changes first**
+
+If you want to keep your local changes:
+
+```bash
+cd /var/www/scraper
+
+# Commit your local changes
+git add .
+git commit -m "Local server changes"
+
+# Pull and merge
+git pull origin main
+
+# If there are merge conflicts, resolve them:
+# 1. Edit the conflicted files
+# 2. git add <resolved-files>
+# 3. git commit
+```
+
 ### Issue: Git pull fails with "permission denied"
 
 **Solution:**
@@ -136,6 +210,20 @@ chmod +x scripts/fix-playwright-deps.sh
 ./scripts/fix-playwright-deps.sh
 pm2 restart scraper
 ```
+
+**Note:** The fix script now provides clear error messages if something goes wrong. If you see errors, they will be displayed (not hidden) so you can diagnose the issue properly.
+
+### Issue: Playwright installation shows unclear errors
+
+**Problem:** Previous versions of scripts suppressed error messages, making debugging difficult.
+
+**Solution:** The updated scripts (`update.sh` and `fix-playwright-deps.sh`) now:
+- Show all error messages clearly
+- Provide actionable error messages
+- Distinguish between "command not available" vs "command failed"
+- Exit with proper error codes for automation
+
+If you encounter Playwright installation errors, you'll now see exactly what went wrong and can take appropriate action.
 
 ## Rollback to Previous Version
 

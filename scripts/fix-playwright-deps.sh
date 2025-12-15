@@ -68,13 +68,28 @@ echo "Step 2: Installing Playwright browsers..."
 npx playwright install chromium
 
 echo ""
-echo "Step 3: Installing Playwright system dependencies (if available)..."
-# Try to install Playwright's system dependencies
-# This command may not be available in all Playwright versions
-npx playwright install-deps chromium 2>/dev/null || {
-    echo "Note: 'playwright install-deps' not available in this version"
-    echo "System dependencies have been installed manually"
-}
+echo "Step 3: Verifying Playwright installation..."
+# Try to install Playwright's system dependencies using Playwright's built-in command
+# This command may not be available in all Playwright versions, which is fine since
+# we've already installed all dependencies manually above
+if command -v npx >/dev/null 2>&1; then
+    # Check if install-deps command exists by checking help output
+    if npx playwright install-deps --help >/dev/null 2>&1; then
+        echo "Running Playwright's dependency installer (optional - dependencies already installed)..."
+        if npx playwright install-deps chromium; then
+            echo "Playwright dependency check completed successfully"
+        else
+            echo "Warning: Playwright install-deps encountered an error, but dependencies were already installed manually"
+            echo "This is usually not a problem - continue with restarting your application"
+        fi
+    else
+        echo "Note: 'playwright install-deps' command not available in this Playwright version"
+        echo "This is fine - all required dependencies have been installed manually above"
+    fi
+else
+    echo "Note: npx not available, skipping Playwright dependency check"
+    echo "All required dependencies have been installed manually above"
+fi
 
 echo ""
 echo "=========================================="
