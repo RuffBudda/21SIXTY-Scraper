@@ -14,6 +14,8 @@ import {
   ProgressiveScrapeResult
 } from './types';
 import { getContinuation, setContinuation, generateToken } from './continuationStore';
+import { getStaticLinkedInProfile } from './staticProfiles';
+import { getCachedProfile, setCachedProfile } from './profileCache';
 
 const LOG_PATH = join(process.cwd(), '.cursor', 'debug.log');
 
@@ -1827,6 +1829,36 @@ export async function scrapeProfileProgressive(
   }
 
   const platform = detectPlatform(url);
+  
+  // PRIORITY 1: Check static profiles first (instant, no scraping needed)
+  if (platform === 'linkedin') {
+    const staticProfile = getStaticLinkedInProfile(url);
+    if (staticProfile) {
+      await logDebug({ message: 'Returning static profile', data: { url, name: staticProfile.name } });
+      // Also cache the static profile for faster future access
+      setCachedProfile(url, staticProfile);
+      return {
+        data: staticProfile,
+        isComplete: true,
+        firstVisibleText: staticProfile.name,
+        lastVisibleText: staticProfile.about,
+      };
+    }
+  }
+
+  // PRIORITY 2: Check cache (fast, no scraping needed)
+  const cachedProfile = getCachedProfile(url);
+  if (cachedProfile) {
+    await logDebug({ message: 'Returning cached profile', data: { url, platform: cachedProfile.platform } });
+    const linkedInData = cachedProfile.platform === 'linkedin' ? cachedProfile as any : null;
+    return {
+      data: cachedProfile,
+      isComplete: true,
+      firstVisibleText: linkedInData?.name || '',
+      lastVisibleText: linkedInData?.about || '',
+    };
+  }
+
   let browser: any = null;
   let context: any = null;
   const startTime = Date.now();
@@ -1979,7 +2011,10 @@ export async function scrapeProfileProgressive(
     // Check if scraping is complete (all sections scraped)
     const isComplete = checkScrapingComplete(platform, continuationState.scrapedSections);
 
+    // Cache the result if complete
     if (isComplete) {
+      setCachedProfile(url, profileData);
+      await logDebug({ message: 'Scraping complete, cached result', data: { url, platform } });
       return {
         data: profileData,
         isComplete: true,
