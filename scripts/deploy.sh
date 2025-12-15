@@ -1,41 +1,41 @@
 #!/bin/bash
 
 # Deployment script for 2160 Scraper
-# Run this from your local machine after droplet is created
+# Run this from your local machine after droplet is created and initial setup is done
 
 set -e
 
 if [ -z "$1" ]; then
-    echo "Usage: ./scripts/deploy.sh [DROPLET_IP]"
-    echo "Example: ./scripts/deploy.sh 123.45.67.89"
+    echo "Usage: ./scripts/deploy.sh [DROPLET_IP] [GITHUB_REPO_URL]"
+    echo "Example: ./scripts/deploy.sh 123.45.67.89 https://github.com/RuffBudda/21SIXTY-Scraper.git"
     exit 1
 fi
 
 DROPLET_IP=$1
+GITHUB_REPO=${2:-"https://github.com/RuffBudda/21SIXTY-Scraper.git"}
 APP_DIR="/var/www/scraper"
 
 echo "=========================================="
 echo "Deploying 2160 Scraper to $DROPLET_IP"
 echo "=========================================="
 
-# Upload files (exclude node_modules, .next, .git)
-echo "Uploading files..."
-rsync -avz --progress \
-    --exclude 'node_modules' \
-    --exclude '.next' \
-    --exclude '.git' \
-    --exclude '.cursor' \
-    --exclude '*.log' \
-    --exclude '.env.local' \
-    ./ root@$DROPLET_IP:$APP_DIR/
-
-echo "Files uploaded successfully!"
-
 # Run setup commands on remote server
-echo "Running setup on remote server..."
+echo "Deploying from GitHub repository..."
 ssh root@$DROPLET_IP << EOF
     set -e
-    cd $APP_DIR
+    
+    # Clone or update repository
+    if [ -d "$APP_DIR/.git" ]; then
+        echo "Updating existing repository..."
+        cd $APP_DIR
+        git pull origin main
+    else
+        echo "Cloning repository..."
+        cd /var/www
+        rm -rf scraper 2>/dev/null || true
+        git clone $GITHUB_REPO scraper
+        cd scraper
+    fi
     
     echo "Installing dependencies..."
     npm install

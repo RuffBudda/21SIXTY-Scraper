@@ -14,6 +14,10 @@ echo "Updating system packages..."
 apt-get update
 apt-get upgrade -y
 
+# Install Git (if not already installed)
+echo "Installing Git..."
+apt-get install -y git
+
 # Install Node.js 20.x
 echo "Installing Node.js 20.x..."
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
@@ -67,11 +71,10 @@ apt-get install -y fail2ban
 systemctl enable fail2ban
 systemctl start fail2ban
 
-# Create application directory
-echo "Creating application directory..."
-mkdir -p /var/www/scraper
+# Create application and log directories
+echo "Creating directories..."
+mkdir -p /var/www
 mkdir -p /var/log/scraper
-chown -R $USER:$USER /var/www/scraper
 chown -R $USER:$USER /var/log/scraper
 
 # Create PM2 log directory
@@ -81,10 +84,11 @@ echo "=========================================="
 echo "Server setup complete!"
 echo "=========================================="
 echo "Next steps:"
-echo "1. Upload application files to /var/www/scraper"
+echo "1. Clone repository: cd /var/www && git clone https://github.com/RuffBudda/21SIXTY-Scraper.git scraper"
 echo "2. Run: cd /var/www/scraper && npm install"
 echo "3. Run: npx playwright install chromium"
 echo "4. Run: npm run build"
-echo "5. Start with PM2: pm2 start ecosystem.config.js"
-echo "6. Configure Nginx and SSL"
+echo "5. Configure .env.local file"
+echo "6. Start with PM2: pm2 start ecosystem.config.js"
+echo "7. Configure Nginx and SSL"
 

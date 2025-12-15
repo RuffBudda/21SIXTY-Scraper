@@ -5,6 +5,7 @@
 - DigitalOcean account
 - Domain `2160.media` managed in DigitalOcean
 - SSH key added to DigitalOcean account
+- GitHub repository with the scraper code
 
 ## Step 1: Create DigitalOcean Droplet
 
@@ -42,42 +43,33 @@ SSH into the droplet:
 ssh root@[DROPLET_IP]
 ```
 
+Install Git (if not already installed):
+
+```bash
+apt-get update
+apt-get install -y git
+```
+
 Run the setup script:
 
 ```bash
+cd /var/www
+git clone https://github.com/RuffBudda/21SIXTY-Scraper.git scraper
+cd scraper
 chmod +x scripts/server-setup.sh
-sudo ./scripts/server-setup.sh
+./scripts/server-setup.sh
 ```
 
-## Step 4: Upload Application Files
-
-From your local machine, upload files to the droplet:
+## Step 4: Install Dependencies and Build
 
 ```bash
-# Create deployment package (exclude node_modules and .next)
-rsync -avz --exclude 'node_modules' --exclude '.next' --exclude '.git' \
-  ./ root@[DROPLET_IP]:/var/www/scraper/
-```
-
-Or use SCP:
-
-```bash
-scp -r . root@[DROPLET_IP]:/var/www/scraper/
-```
-
-## Step 5: Install Dependencies and Build
-
-SSH into the droplet:
-
-```bash
-ssh root@[DROPLET_IP]
 cd /var/www/scraper
 npm install
 npx playwright install chromium
 npm run build
 ```
 
-## Step 6: Configure Environment Variables
+## Step 5: Configure Environment Variables
 
 Create `.env.local` file:
 
@@ -87,7 +79,7 @@ nano /var/www/scraper/.env.local
 
 Add your environment variables (API_KEY, etc.)
 
-## Step 7: Start Application with PM2
+## Step 6: Start Application with PM2
 
 ```bash
 cd /var/www/scraper
@@ -96,7 +88,7 @@ pm2 startup
 pm2 save
 ```
 
-## Step 8: Configure Nginx
+## Step 7: Configure Nginx
 
 Copy Nginx configuration:
 
@@ -107,7 +99,7 @@ nginx -t
 systemctl reload nginx
 ```
 
-## Step 9: Setup SSL Certificate
+## Step 8: Setup SSL Certificate
 
 ```bash
 apt install certbot python3-certbot-nginx
@@ -116,7 +108,7 @@ certbot --nginx -d scrape.2160.media
 
 Follow the prompts. Certbot will automatically configure SSL.
 
-## Step 10: Verify Deployment
+## Step 9: Verify Deployment
 
 1. Check application is running: `pm2 status`
 2. Check Nginx: `systemctl status nginx`
@@ -129,9 +121,23 @@ Follow the prompts. Certbot will automatically configure SSL.
 - Monitor resources: `pm2 monit`
 - Check Nginx logs: `tail -f /var/log/nginx/access.log`
 
+## Updating the Application
+
+To update the application after making changes:
+
+```bash
+ssh root@[DROPLET_IP]
+cd /var/www/scraper
+git pull origin main
+npm install
+npm run build
+pm2 restart scraper
+```
+
 ## Troubleshooting
 
 - If Playwright fails: Check system dependencies are installed
 - If memory issues: Monitor with `pm2 monit` and adjust browser pool settings
 - If SSL fails: Ensure DNS A record is propagated (check with `dig scrape.2160.media`)
+- If git clone fails: Ensure the repository is public or SSH keys are configured for GitHub
 
