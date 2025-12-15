@@ -17,7 +17,7 @@ export async function scrapeLinkedInProfileWithScrapfly(url: string): Promise<Li
     url: url,
     asp: 'true', // Enable anti-scraping protection bypass
     render_js: 'true', // Enable JavaScript rendering
-    format: 'html', // Get HTML format
+    format: 'clean_html', // Get clean HTML format
   });
 
   const apiUrl = `${SCRAPFLY_API_URL}?${params.toString()}`;
