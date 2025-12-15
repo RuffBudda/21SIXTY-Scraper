@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@sparticuz/chromium": "^143.0.0",
+    "@types/cheerio": "^0.22.35",
+    "cheerio": "^1.1.2",
     "next": "^14.2.0",
     "pdf-parse": "^2.4.5",
     "playwright-core": "^1.57.0",
