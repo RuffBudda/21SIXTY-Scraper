@@ -71,8 +71,7 @@ export async function POST(request: NextRequest) {
       targetUrl = url;
     }
 
-    // Scrape profile progressively (supports continuation)
-    // Add timeout wrapper to prevent 504 errors
+    // Scrape profile using HTTP-based scraping (fetch + Cheerio)
     // Vercel free tier has 10s limit, so we set timeout to 8s to ensure we return JSON before Vercel times out
     const TIMEOUT_MS = 8000; // 8 seconds - well under Vercel's 10s limit
     
@@ -109,14 +108,19 @@ export async function POST(request: NextRequest) {
       }
       
       // Return error as valid JSON
+      const errorMessage = error.message || 'Scraping error occurred';
+      const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('Timeout');
+      
       return NextResponse.json(
         {
           success: false,
-          error: error.message || 'Scraping timeout or error occurred',
+          error: isTimeout 
+            ? 'Request timeout - the scraping took too long. Please try again or use a simpler profile.'
+            : errorMessage,
           timestamp: new Date().toISOString(),
           url: targetUrl,
         },
-        { status: 504 }
+        { status: isTimeout ? 504 : 500 }
       );
     }
 

@@ -253,6 +253,12 @@ export default function Home() {
                       type="text"
                       value={linkedInUrl}
                       onChange={(e) => setLinkedInUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !scraping && linkedInUrl.trim()) {
+                          e.preventDefault();
+                          handleScrape();
+                        }
+                      }}
                       placeholder="https://www.linkedin.com/in/example or https://instagram.com/username or https://example.com"
                       className="flex-1 px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-transparent text-gray-100 placeholder-gray-500 transition-all"
                     />
@@ -370,6 +376,12 @@ export default function Home() {
                       type="text"
                       value={linkedInUrl}
                       onChange={(e) => setLinkedInUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !webhookLoading && linkedInUrl.trim()) {
+                          e.preventDefault();
+                          handleTestWebhook();
+                        }
+                      }}
                       placeholder="https://www.linkedin.com/in/example or https://instagram.com/username or https://example.com"
                       className="flex-1 px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-transparent text-gray-100 placeholder-gray-500 transition-all"
                     />

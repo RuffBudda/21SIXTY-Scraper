@@ -1,5 +1,3 @@
-import chromium from '@sparticuz/chromium';
-import { chromium as playwrightChromium } from 'playwright-core';
 import { promises as fs, existsSync } from 'fs';
 import { join } from 'path';
 import { 
@@ -16,6 +14,11 @@ import {
 import { getContinuation, setContinuation, generateToken } from './continuationStore';
 import { getStaticLinkedInProfile } from './staticProfiles';
 import { getCachedProfile, setCachedProfile } from './profileCache';
+import { 
+  scrapeLinkedInProfileHTTP, 
+  scrapeInstagramProfileHTTP, 
+  scrapeWebsitePersonHTTP 
+} from './httpScraper';
 
 const LOG_PATH = join(process.cwd(), '.cursor', 'debug.log');
 
@@ -1818,7 +1821,7 @@ async function extractWebsitePersonDataProgressive(
 
 /**
  * Progressive scraping function that supports continuation tokens
- * Extracts first/last visible text immediately, then continues scraping sections
+ * Uses HTTP-based scraping (fetch + Cheerio) - works on Vercel free plan
  */
 export async function scrapeProfileProgressive(
   url: string,
@@ -1859,10 +1862,8 @@ export async function scrapeProfileProgressive(
     };
   }
 
-  let browser: any = null;
-  let context: any = null;
   const startTime = Date.now();
-  const MAX_EXECUTION_TIME = 8500; // 8.5 seconds max, 1.5s buffer for Vercel's 10s limit
+  const MAX_EXECUTION_TIME = 8000; // 8 seconds max, 2s buffer for Vercel's 10s limit
 
   // Initialize or load continuation state
   let continuationState: ScrapeContinuation = continuation || {
@@ -1879,155 +1880,67 @@ export async function scrapeProfileProgressive(
   let lastVisibleText = continuationState.lastVisibleText || '';
 
   try {
-    // Detect environment - prioritize Vercel detection
-    const hasAwsLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
-    const hasVercel = !!process.env.VERCEL || !!process.env.VERCEL_ENV;
-    const hasLambdaRoot = !!process.env.LAMBDA_TASK_ROOT;
-    const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
-    // Always use serverless mode if on Vercel or if not in dev mode on Linux
-    const isServerless = hasAwsLambda || hasVercel || hasLambdaRoot || (!isDev && process.platform === 'linux');
-
-    // Use @sparticuz/chromium for serverless - optimized for Vercel/Lambda
-    // This is the only reliable option for serverless environments
-    let launchOptions: any;
-
-    if (isServerless) {
-      try {
-        // Configure Chromium for serverless environment (Vercel/Lambda)
-        chromium.setGraphicsMode = false;
-        
-        const execPath = await chromium.executablePath();
-        const chromiumArgs = chromium.args || [];
-
-        if (!execPath) {
-          throw new Error('Failed to get Chromium executable path from @sparticuz/chromium');
-        }
-
-        // Optimized args for speed - minimal flags for faster startup
-        const serverlessArgs = [
-          ...chromiumArgs,
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--single-process', // Faster startup
-          '--disable-gpu',
-          '--disable-software-rasterizer',
-          '--disable-extensions',
-          '--disable-background-networking',
-          '--disable-background-timer-throttling',
-          '--disable-renderer-backgrounding',
-          '--disable-backgrounding-occluded-windows',
-        ];
-
-        launchOptions = {
-          args: serverlessArgs,
-          executablePath: execPath,
-          headless: true,
-        };
-      } catch (chromiumError) {
-        console.error('Error configuring @sparticuz/chromium:', chromiumError);
-        throw new Error(`Failed to configure Chromium for serverless environment: ${chromiumError instanceof Error ? chromiumError.message : String(chromiumError)}`);
-      }
-    } else {
-      // Local development - use system Chromium or installed Playwright browsers
-      launchOptions = {
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-        ],
-      };
-    }
-
-    browser = await playwrightChromium.launch(launchOptions);
-    // In Playwright 1.57.0+, setUserAgent is not available on Page object
-    // Instead, create a context with userAgent and create pages from that context
-    context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    });
-    const page = await context.newPage();
-
-    // Navigate with longer timeout and wait for network idle
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForTimeout(500); // Minimal wait for initial render
-
-    // PRIORITY: Extract first and last visible text immediately
-    if (!firstVisibleText || !lastVisibleText) {
-      const firstLast = await extractFirstLastVisibleText(page);
-      firstVisibleText = firstLast.firstVisibleText;
-      lastVisibleText = firstLast.lastVisibleText;
-      continuationState.firstVisibleText = firstVisibleText;
-      continuationState.lastVisibleText = lastVisibleText;
-    }
-
-    // Check if we have time remaining
-    const elapsed = Date.now() - startTime;
-    if (elapsed >= MAX_EXECUTION_TIME) {
-      await browser.close();
-      const token = continuationState.sessionId;
-      continuationState.timestamp = Date.now();
-      setContinuation(token, continuationState);
-      
-      return {
-        data: continuationState.partialData as ProfileData,
-        isComplete: false,
-        continuation: continuationState,
-        firstVisibleText,
-        lastVisibleText,
-      };
-    }
-
-    // Continue scraping sections based on platform
+    // Use HTTP-based scraping (fetch + Cheerio)
     let profileData: ProfileData;
-    const remainingTime = MAX_EXECUTION_TIME - elapsed;
 
     switch (platform) {
       case 'linkedin':
         if (!validateLinkedInUrl(url)) {
           throw new Error('Invalid LinkedIn profile URL');
         }
-        // Skip expansion for speed - extract data directly
-        profileData = await extractLinkedInProfileProgressive(page, url, continuationState);
+        profileData = await scrapeLinkedInProfileHTTP(url);
+        // Extract first/last visible text from scraped data
+        if (!firstVisibleText) {
+          firstVisibleText = profileData.name || '';
+        }
+        if (!lastVisibleText) {
+          lastVisibleText = (profileData as LinkedInProfileData).about || '';
+        }
         break;
 
       case 'instagram':
         if (!validateInstagramUrl(url)) {
           throw new Error('Invalid Instagram profile URL');
         }
-        profileData = await extractInstagramProfileProgressive(page, url, continuationState);
+        profileData = await scrapeInstagramProfileHTTP(url);
+        // Extract first/last visible text from scraped data
+        if (!firstVisibleText) {
+          firstVisibleText = (profileData as InstagramProfileData).username || '';
+        }
+        if (!lastVisibleText) {
+          lastVisibleText = (profileData as InstagramProfileData).biography || '';
+        }
         break;
 
       case 'website':
-        profileData = await extractWebsitePersonDataProgressive(page, url, continuationState);
+        profileData = await scrapeWebsitePersonHTTP(url);
+        // Extract first/last visible text from scraped data
+        if (!firstVisibleText) {
+          firstVisibleText = profileData.name || profileData.title || '';
+        }
+        if (!lastVisibleText) {
+          lastVisibleText = (profileData as WebsitePersonData).description || '';
+        }
         break;
 
       default:
         throw new Error('Unsupported platform');
     }
 
-    await browser.close();
+    // Update continuation state
+    continuationState.firstVisibleText = firstVisibleText;
+    continuationState.lastVisibleText = lastVisibleText;
+    continuationState.partialData = profileData;
+    continuationState.scrapedSections = ['all']; // HTTP scraping gets all data at once
+    continuationState.timestamp = Date.now();
 
-    // Check if scraping is complete (all sections scraped)
-    const isComplete = checkScrapingComplete(platform, continuationState.scrapedSections);
-
-    // Cache the result if complete
-    if (isComplete) {
-      setCachedProfile(url, profileData);
-      await logDebug({ message: 'Scraping complete, cached result', data: { url, platform } });
-      return {
-        data: profileData,
-        isComplete: true,
-        firstVisibleText,
-        lastVisibleText,
-      };
-    } else {
-      // Update continuation state with latest data
-      continuationState.partialData = profileData;
-      continuationState.timestamp = Date.now();
+    // Check execution time
+    const elapsed = Date.now() - startTime;
+    if (elapsed >= MAX_EXECUTION_TIME) {
+      // Timeout - return partial data with continuation token
       const token = continuationState.sessionId;
       setContinuation(token, continuationState);
-
+      
       return {
         data: profileData,
         isComplete: false,
@@ -2036,11 +1949,18 @@ export async function scrapeProfileProgressive(
         lastVisibleText,
       };
     }
-  } catch (error: any) {
-    if (browser) {
-      await browser.close().catch(() => {});
-    }
+
+    // Cache the result (HTTP scraping is typically complete)
+    setCachedProfile(url, profileData);
+    await logDebug({ message: 'HTTP scraping complete, cached result', data: { url, platform, elapsed } });
     
+    return {
+      data: profileData,
+      isComplete: true,
+      firstVisibleText,
+      lastVisibleText,
+    };
+  } catch (error: any) {
     // Return partial data if we have any
     if (continuationState.partialData && Object.keys(continuationState.partialData).length > 0) {
       const token = continuationState.sessionId;
