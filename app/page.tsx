@@ -7,12 +7,27 @@ import N8NInstructions from '@/components/N8NInstructions';
 
 type TabType = 'scrape' | 'webhook';
 
+const AUTH_USERNAME = 'abubakr';
+const AUTH_PASSWORD = 'M@0ZD0ng';
+
+interface LinkedInStats {
+  count: number;
+  limit: number;
+  remaining: number;
+  month: string;
+}
+
 export default function Home() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('scrape');
   const [linkedInUrl, setLinkedInUrl] = useState('');
   const [scraping, setScraping] = useState(false);
   const [scrapedData, setScrapedData] = useState<ProfileData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [linkedInStats, setLinkedInStats] = useState<LinkedInStats | null>(null);
 
   // Webhook panel state
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -24,7 +39,57 @@ export default function Home() {
   useEffect(() => {
     const currentUrl = typeof window !== 'undefined' ? window.location.origin : '';
     setWebhookUrl(`${currentUrl}/api/scrape`);
+    
+    // Check if already authenticated (stored in sessionStorage)
+    const authStatus = typeof window !== 'undefined' ? sessionStorage.getItem('authenticated') : null;
+    if (authStatus === 'true') {
+      setIsAuthenticated(true);
+    }
   }, []);
+
+  // Fetch LinkedIn stats periodically
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
+    const fetchStats = async () => {
+      try {
+        const response = await fetch('/api/linkedin-stats');
+        const data = await response.json();
+        if (data.success) {
+          setLinkedInStats(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch LinkedIn stats:', err);
+      }
+    };
+    
+    fetchStats();
+    const interval = setInterval(fetchStats, 5000); // Update every 5 seconds
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    
+    if (username === AUTH_USERNAME && password === AUTH_PASSWORD) {
+      setIsAuthenticated(true);
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('authenticated', 'true');
+      }
+    } else {
+      setAuthError('Invalid username or password');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('authenticated');
+    }
+    setUsername('');
+    setPassword('');
+  };
 
   const handleScrape = async () => {
     if (!linkedInUrl.trim()) {
@@ -61,6 +126,20 @@ export default function Home() {
 
       if (data.success && data.data) {
         setScrapedData(data.data);
+        
+        // Update LinkedIn stats from response headers
+        const linkedInCount = response.headers.get('X-LinkedIn-Monthly-Count');
+        const linkedInLimit = response.headers.get('X-LinkedIn-Monthly-Limit');
+        const linkedInRemaining = response.headers.get('X-LinkedIn-Monthly-Remaining');
+        
+        if (linkedInCount && linkedInLimit && linkedInRemaining) {
+          setLinkedInStats({
+            count: parseInt(linkedInCount),
+            limit: parseInt(linkedInLimit),
+            remaining: parseInt(linkedInRemaining),
+            month: new Date().toISOString().substring(0, 7), // YYYY-MM
+          });
+        }
       } else {
         throw new Error(data.error || 'No data received');
       }
@@ -184,11 +263,92 @@ export default function Home() {
   };
 
 
+  // Show login form if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <main className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent mb-2">
+              21SIXTY SCRAPER
+            </h1>
+            <p className="text-gray-400">Please login to continue</p>
+          </div>
+          
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-300 mb-2">
+                Username
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-transparent text-gray-100 placeholder-gray-500 transition-all"
+                placeholder="Enter username"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-semibold text-gray-300 mb-2">
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-transparent text-gray-100 placeholder-gray-500 transition-all"
+                placeholder="Enter password"
+                required
+              />
+            </div>
+            
+            {authError && (
+              <div className="bg-red-950/50 border border-red-800/50 text-red-300 px-4 py-3 rounded-lg">
+                {authError}
+              </div>
+            )}
+            
+            <button
+              type="submit"
+              className="w-full px-8 py-3 bg-linkedin text-white font-semibold rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-lg shadow-linkedin/20 hover:shadow-linkedin/30"
+            >
+              Login
+            </button>
+          </form>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-gray-950">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12 max-w-7xl">
         {/* Header */}
         <header className="text-center mb-12">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-center gap-4 flex-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img 
+                src="/logos/logo.png" 
+                alt="21SIXTY SCRAPER Logo" 
+                className="h-20 w-20 rounded-xl shadow-lg" 
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }} 
+              />
+              <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                21SIXTY SCRAPER
+              </h1>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium rounded-lg transition-all duration-200 border border-gray-700 hover:border-gray-600"
+            >
+              Logout
+            </button>
+          </div>
           <div className="flex items-center justify-center gap-4 mb-6">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
@@ -207,6 +367,37 @@ export default function Home() {
             Scrape LinkedIn profiles, Instagram profiles, and websites with ease. Export to JSON, CSV, or TXT.
           </p>
         </header>
+
+        {/* LinkedIn Monthly Limit Progress Bar */}
+        {linkedInStats && (
+          <div className="mb-8 bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-gray-300">
+                LinkedIn Monthly Scrape Limit
+              </h3>
+              <span className="text-sm text-gray-400">
+                {linkedInStats.count} / {linkedInStats.limit} used
+              </span>
+            </div>
+            <div className="w-full bg-gray-800 rounded-full h-4 mb-2">
+              <div
+                className={`h-4 rounded-full transition-all duration-300 ${
+                  linkedInStats.remaining > 20
+                    ? 'bg-green-500'
+                    : linkedInStats.remaining > 10
+                    ? 'bg-yellow-500'
+                    : 'bg-red-500'
+                }`}
+                style={{
+                  width: `${(linkedInStats.count / linkedInStats.limit) * 100}%`,
+                }}
+              />
+            </div>
+            <p className="text-sm text-gray-400">
+              {linkedInStats.remaining} scrapes remaining this month ({linkedInStats.month})
+            </p>
+          </div>
+        )}
 
         {/* Main Card */}
         <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-2xl shadow-2xl overflow-hidden">

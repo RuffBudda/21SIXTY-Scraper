@@ -14,8 +14,8 @@ import {
 import { getContinuation, setContinuation, generateToken } from './continuationStore';
 import { getStaticLinkedInProfile } from './staticProfiles';
 import { getCachedProfile, setCachedProfile } from './profileCache';
+import { scrapeLinkedInProfileWithScrapfly } from './scrapfly';
 import { 
-  scrapeLinkedInProfileHTTP, 
   scrapeInstagramProfileHTTP, 
   scrapeWebsitePersonHTTP 
 } from './httpScraper';
@@ -1888,7 +1888,7 @@ export async function scrapeProfileProgressive(
         if (!validateLinkedInUrl(url)) {
           throw new Error('Invalid LinkedIn profile URL');
         }
-        profileData = await scrapeLinkedInProfileHTTP(url);
+        profileData = await scrapeLinkedInProfileWithScrapfly(url);
         // Extract first/last visible text from scraped data
         if (!firstVisibleText) {
           firstVisibleText = profileData.name || '';
