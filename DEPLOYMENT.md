@@ -50,9 +50,10 @@ apt-get update
 apt-get install -y git
 ```
 
-Run the setup script:
+Create application directory and clone repository:
 
 ```bash
+mkdir -p /var/www
 cd /var/www
 git clone https://github.com/RuffBudda/21SIXTY-Scraper.git scraper
 cd scraper

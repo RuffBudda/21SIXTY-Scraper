@@ -75,6 +75,7 @@ systemctl start fail2ban
 echo "Creating directories..."
 mkdir -p /var/www
 mkdir -p /var/log/scraper
+chown -R $USER:$USER /var/www
 chown -R $USER:$USER /var/log/scraper
 
 # Create PM2 log directory
@@ -83,12 +84,18 @@ mkdir -p ~/.pm2/logs
 echo "=========================================="
 echo "Server setup complete!"
 echo "=========================================="
-echo "Next steps:"
-echo "1. Clone repository: cd /var/www && git clone https://github.com/RuffBudda/21SIXTY-Scraper.git scraper"
-echo "2. Run: cd /var/www/scraper && npm install"
-echo "3. Run: npx playwright install chromium"
-echo "4. Run: npm run build"
+echo ""
+echo "NOTE: If you haven't cloned the repository yet, run:"
+echo "  mkdir -p /var/www"
+echo "  cd /var/www"
+echo "  git clone https://github.com/RuffBudda/21SIXTY-Scraper.git scraper"
+echo ""
+echo "Then continue with:"
+echo "1. cd /var/www/scraper"
+echo "2. npm install"
+echo "3. npx playwright install chromium"
+echo "4. npm run build"
 echo "5. Configure .env.local file"
-echo "6. Start with PM2: pm2 start ecosystem.config.js"
+echo "6. pm2 start ecosystem.config.js"
 echo "7. Configure Nginx and SSL"
 
