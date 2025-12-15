@@ -22,16 +22,31 @@ export async function scrapeLinkedInProfileWithScrapfly(url: string): Promise<Li
 
   const apiUrl = `${SCRAPFLY_API_URL}?${params.toString()}`;
 
-  const response = await fetch(apiUrl, {
-    method: 'GET',
-    headers: {
-      'Accept': 'application/json',
-    },
-    signal: AbortSignal.timeout(30000), // 30 second timeout
-  });
+  // Use a shorter timeout to fit within Vercel's 10s limit
+  // Set to 6 seconds to leave buffer for HTML parsing and processing (route timeout is 8s)
+  let response;
+  try {
+    response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(6000), // 6 second timeout - leaves 2s for processing
+    });
+  } catch (error: any) {
+    // Handle timeout from AbortSignal
+    if (error.name === 'AbortError' || error.message?.includes('timeout')) {
+      throw new Error('Scrapfly API request timed out. The LinkedIn profile may be too complex or the service is slow. Please try again.');
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unknown error');
+    // Handle timeout specifically
+    if (response.status === 504 || errorText.includes('timeout')) {
+      throw new Error('Scrapfly API request timed out. The LinkedIn profile may be too complex or the service is slow. Please try again.');
+    }
     throw new Error(`Scrapfly API error: ${response.status} - ${errorText}`);
   }
 
