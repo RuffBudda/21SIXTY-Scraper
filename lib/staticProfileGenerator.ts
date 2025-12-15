@@ -95,8 +95,8 @@ ${profiles
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '')
         .substring(0, 30) || `profile${index}`;
-    const normalized = normalizeLinkedInUrl(profile.url);
-    return `  [normalizeLinkedInUrl('${profile.url}')]: ${profileName}Profile,\n  [normalizeLinkedInUrl('${profile.url}/')]: { ...${profileName}Profile, url: normalizeLinkedInUrl('${profile.url}/') },`;
+    // Use string literals - normalizeLinkedInUrl will be in the generated code
+    return `  ['${profile.url.replace(/\/$/, '')}']: ${profileName}Profile,\n  ['${profile.url.replace(/\/$/, '')}/']: { ...${profileName}Profile, url: '${profile.url.replace(/\/$/, '')}/' },`;
   })
   .join('\n')}
 };
