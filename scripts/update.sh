@@ -27,11 +27,15 @@ echo "Current version:"
 git log -1 --oneline
 echo ""
 
+# Track if we stashed changes (must be before early exit check)
+STASHED_CHANGES=false
+
 # Check for local changes
 if ! git diff-index --quiet HEAD --; then
     echo "Warning: You have uncommitted local changes"
     echo "Stashing local changes..."
     git stash push -m "Auto-stash before update $(date +%Y-%m-%d_%H:%M:%S)"
+    STASHED_CHANGES=true
 fi
 
 # Fetch latest changes
@@ -44,6 +48,15 @@ REMOTE=$(git rev-parse origin/$BRANCH)
 
 if [ "$LOCAL" = "$REMOTE" ]; then
     echo "Already up to date!"
+    
+    # If we stashed changes, inform the user before exiting
+    if [ "$STASHED_CHANGES" = true ]; then
+        echo ""
+        echo "Note: Local changes were stashed before checking for updates."
+        echo "To view stashed changes: git stash list"
+        echo "To apply stashed changes: git stash pop"
+    fi
+    
     exit 0
 fi
 
@@ -90,8 +103,8 @@ echo ""
 echo "Restarting application..."
 pm2 restart scraper
 
-# Check if there were stashed changes
-if git stash list | grep -q "Auto-stash before update"; then
+# Inform user about stashed changes if any were stashed
+if [ "$STASHED_CHANGES" = true ]; then
     echo ""
     echo "Note: Local changes were stashed before update."
     echo "To view stashed changes: git stash list"
